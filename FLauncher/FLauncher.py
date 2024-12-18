@@ -1,9 +1,9 @@
-import sys, os, subprocess, zipfile, shutil
-import requests, markdown
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QScrollArea, QLabel, QSpacerItem, QSizePolicy, QFrame, QPushButton, QComboBox, QMessageBox
+import sys, os, subprocess, zipfile, shutil, requests, markdown
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QScrollArea, QLabel, QSpacerItem, QSizePolicy, QFrame, QPushButton, QComboBox, QMessageBox, QHBoxLayout
 from PyQt5.QtGui import QPalette, QBrush, QImage, QDesktopServices, QIcon
 from PyQt5.QtCore import Qt, QTimer, QUrl, QSize
 from pathlib import Path
+from datetime import datetime
 
 def resource_path(relative_path):
         """Получить абсолютный путь к ресурсу, независимо от того, запущена ли программа как .exe или нет."""
@@ -41,24 +41,24 @@ class FLauncher(QMainWindow):
     def add_blue_bar(self):
         blue_bar = QWidget(self)
         blue_bar.setGeometry(0, self.height() - 80, self.width(), 80)
-        blue_bar.setStyleSheet("background-color: rgba(115, 186, 255, 0.8);")
+        blue_bar.setStyleSheet("background-color: rgba(114, 241, 89, 0.8);")
 
         self.version_combo = QComboBox(blue_bar)
         self.version_combo.setGeometry(10, 10, 200, 60)
-        self.version_combo.setStyleSheet("background-color: #007BFF; color: white; font-size: 18px;")
+        self.version_combo.setStyleSheet("background-color: white; color: black; font-size: 18px; font-weight: bold;")
         self.version_combo.addItem("Получение версий...")
 
         self.download_button = QPushButton("Скачать", blue_bar)
         self.download_button.setGeometry(220, 10, 150, 30)
-        self.download_button.setStyleSheet("background-color: blue; color: white; font-size: 14px;")
+        self.download_button.setStyleSheet("background-color: rgb(240, 207, 61); color: white; font-size: 18px; font-weight: bold;")
         self.download_button.clicked.connect(self.on_download_button_click)
 
         self.play_button = QPushButton("Играть", blue_bar)
         self.play_button.setGeometry(220, 40, 150, 30)
-        self.play_button.setStyleSheet("background-color: green; color: white; font-size: 14px;")
+        self.play_button.setStyleSheet("background-color: rgb(240, 207, 61); color: white; font-size: 18px; font-weight: bold;")
         self.play_button.clicked.connect(self.on_play_button_click)
 
-        icon_reload = QIcon(resource_path("ui/reload.png"))
+        icon_reload = QIcon(resource_path("ui/FLM.png"))
         self.reload_button = QPushButton(blue_bar)
         self.reload_button.setIcon(icon_reload)
         self.reload_button.setIconSize(QSize(60, 60))
@@ -71,12 +71,12 @@ class FLauncher(QMainWindow):
                 outline: none;
             }
         """)
-        self.reload_button.clicked.connect(self.refresh_versions)
+        self.reload_button.clicked.connect(self.on_vwm_button_click)
 
-        icon_vwm = QIcon(resource_path("ui/FLM.png"))
+        icon_vwm = QIcon(resource_path("ui/reload.png"))
         self.vwm_button = QPushButton(blue_bar)
         self.vwm_button.setIcon(icon_vwm)
-        self.vwm_button.setIconSize(QSize(60, 60))
+        self.vwm_button.setIconSize(QSize(30, 30))
         self.vwm_button.setGeometry(895, 10, 60, 60)
         self.vwm_button.setStyleSheet("""
             QPushButton {
@@ -86,12 +86,12 @@ class FLauncher(QMainWindow):
                 outline: none;
             }
         """)
-        self.vwm_button.clicked.connect(self.on_vwm_button_click)
+        self.vwm_button.clicked.connect(self.refresh_versions)
 
         icon_folder = QIcon(resource_path("ui/folder.png"))
         self.folder_button = QPushButton(blue_bar)
         self.folder_button.setIcon(icon_folder)
-        self.folder_button.setIconSize(QSize(60, 60))
+        self.folder_button.setIconSize(QSize(30, 30))
         self.folder_button.setGeometry(965, 10, 60, 60)
         self.folder_button.setStyleSheet("""
             QPushButton {
@@ -106,7 +106,7 @@ class FLauncher(QMainWindow):
         icon_settings = QIcon(resource_path("ui/settings.png"))
         self.settings_button = QPushButton(blue_bar)
         self.settings_button.setIcon(icon_settings)
-        self.settings_button.setIconSize(QSize(60, 60))
+        self.settings_button.setIconSize(QSize(30, 30))
         self.settings_button.setGeometry(1035, 10, 60, 60)
         self.settings_button.setStyleSheet("""
             QPushButton {
@@ -121,7 +121,7 @@ class FLauncher(QMainWindow):
     def add_release_panel(self):
         release_panel = QWidget(self)
         release_panel.setGeometry(20, 40, 700, self.height() - 120)
-        release_panel.setStyleSheet("background-color: rgba(135, 206, 235, 0.5);")
+        release_panel.setStyleSheet("background-color: rgba(255, 255, 255, 0.7);")
 
         release_layout = QVBoxLayout(release_panel)
 
@@ -135,18 +135,18 @@ class FLauncher(QMainWindow):
     def add_info_panel(self):
         info_panel = QWidget(self)
         info_panel.setGeometry(830, 40, 250, self.height() - 120)
-        info_panel.setStyleSheet("background-color: rgba(135, 206, 235, 0.5); background-color: transparent;")  # Прозрачный фон панели
+        info_panel.setStyleSheet("background-color: rgba(73, 171, 209, 0.7);")
 
         info_layout = QVBoxLayout(info_panel)
 
         label = QLabel(info_panel)
         label.setAlignment(Qt.AlignCenter)
         label.setText('''
-            <div style="background-color: rgba(135, 206, 235, 0.5); padding: 10px;">
-                <span style="font-size: 30px; font-weight: bold; color: black;">
+            <div style="background-color: rgba(73, 171, 209, 0.5); padding: 10px;">
+                <span style="font-size: 30px; font-weight: bold; color: white;">
                     FLAUNCHER
                 </span><br>
-                <span style="font-size: 16px; font-weight: normal; color: black;">
+                <span style="font-size: 16px; font-weight: normal; color: white;">
                     ЛАУНЧЕР ДЛЯ VOXELCORE
                 </span>
             </div>
@@ -156,7 +156,7 @@ class FLauncher(QMainWindow):
         info_layout.addSpacing(5)
 
         button_voxel = QPushButton("VoxelWorld", info_panel)
-        button_voxel.setStyleSheet("background-color: rgba(135, 206, 235, 0.5); font-size: 18px; color: black; padding: 10px;")
+        button_voxel.setStyleSheet("background-color: rgb(62, 148, 182); font-size: 18px; color: white; padding: 10px;")
         button_voxel.setFixedHeight(40)
         button_voxel.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://voxelworld.ru/profile/84")))
         info_layout.addWidget(button_voxel)
@@ -164,7 +164,7 @@ class FLauncher(QMainWindow):
         info_layout.addSpacing(-7)
 
         button_freshlend = QPushButton("FreshLend Studio", info_panel)
-        button_freshlend.setStyleSheet("background-color: rgba(135, 206, 235, 0.5); font-size: 18px; color: black; padding: 10px;")
+        button_freshlend.setStyleSheet("background-color: rgb(62, 148, 182); font-size: 18px; color: white; padding: 10px;")
         button_freshlend.setFixedHeight(40)
         button_freshlend.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://freshlend.github.io")))
         info_layout.addWidget(button_freshlend)
@@ -395,30 +395,52 @@ class FLauncher(QMainWindow):
                 version = tag_name.replace('voxelcore', '').strip()
 
                 release_url = release.get('html_url', '#')
+
+                # Получаем дату релиза
+                release_date_str = release.get('published_at', '')
+                if release_date_str:
+                    release_date = datetime.strptime(release_date_str, '%Y-%m-%dT%H:%M:%SZ')
+                    release_date_formatted = release_date.strftime('%d %B %Y')
+
+                # Создаем горизонтальный layout для версии и даты
+                release_layout = QHBoxLayout()
+
+                # Создаем метку для версии
                 version_label = QLabel(f'VoxelCore<a href="{release_url}"> {version}</a>', self)
                 version_label.setStyleSheet("font-weight: bold; font-size: 24px; color: black;")
                 version_label.setOpenExternalLinks(True)
-                layout.addWidget(version_label)
 
+                # Создаем метку с датой
+                date_label = QLabel(f'Дата релиза: {release_date_formatted}', self)
+                date_label.setStyleSheet("font-size: 12px; color: gray; margin-left: 10px;")
+
+                # Добавляем метки в горизонтальный layout
+                release_layout.addWidget(version_label)
+                release_layout.addWidget(date_label)
+
+                # Добавляем горизонтальный layout в основной layout
+                layout.addLayout(release_layout)
+
+                # Добавляем описание релиза
                 release_body = release['body']
                 html_body = markdown.markdown(release_body)
-
                 html_body = html_body.replace('<a', '<a target="_blank"')
 
                 release_info_label = QLabel(self)
                 release_info_label.setOpenExternalLinks(True)
                 release_info_label.setText(html_body)
-
                 release_info_label.setWordWrap(True)
                 release_info_label.setStyleSheet("font-weight: bold; font-size: 14px; line-height: 1.5; color: black;")
                 layout.addWidget(release_info_label)
 
+                # Разделитель между релизами
                 separator = QFrame(self)
                 separator.setFrameShape(QFrame.HLine)
                 separator.setFrameShadow(QFrame.Sunken)
                 separator.setStyleSheet("background-color: black; height: 2px;")
                 layout.addWidget(separator)
 
+                # Разделитель для пространства между элементами
                 layout.addItem(QSpacerItem(20, 10, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
                 count += 1
