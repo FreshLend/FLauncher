@@ -191,9 +191,11 @@ class FLauncher(QMainWindow):
         if selected_version != "Получение версий...":
             version_folder = self.app_data_path / selected_version
             voxel_core_path = version_folder / "VoxelCore.exe"
-            
-            if os.path.exists(voxel_core_path):
-                self.launch_game(voxel_core_path, version_folder)
+            voxel_engine_path = version_folder / "VoxelEngine.exe"
+
+            if os.path.exists(voxel_core_path) or os.path.exists(voxel_engine_path):
+                exe_to_launch = voxel_core_path if os.path.exists(voxel_core_path) else voxel_engine_path
+                self.launch_game(exe_to_launch, version_folder)
             else:
                 self.show_error_message("Ошибка", "Сначала скачайте выбранную версию.")
         else:
@@ -235,25 +237,45 @@ class FLauncher(QMainWindow):
     def download_and_extract_version(self, version_tag):
         """
         Скачивает архив с версией с GitHub, распаковывает и сохраняет в директорию versions.
+        Ищет файл с win64.zip в релизах.
         """
         try:
-            url = f"https://github.com/MihailRis/VoxelEngine-Cpp/releases/download/{version_tag}/voxelcore.{version_tag[1:]}_win64.zip"
+            api_url = f"https://api.github.com/repos/MihailRis/VoxelEngine-Cpp/releases/tags/{version_tag}"
             
-            response = requests.get(url)
+            response = requests.get(api_url)
             if response.status_code == 200:
-                zip_path = self.downloads_path / f"voxelcore.{version_tag[1:]}_win64.zip"
+                release_data = response.json()
                 
-                with open(zip_path, "wb") as f:
-                    f.write(response.content)
+                file_url = None
+                for asset in release_data.get('assets', []):
+                    if 'win64.zip' in asset['name']:
+                        file_url = asset['browser_download_url']
+                        break
                 
-                self.extract_zip(zip_path, version_tag)
-                
-                self.show_info_message("Успешно!", f"Версия {version_tag} успешно скачана и распакована!")
+                if file_url:
+                    zip_path = self.downloads_path / f"{release_data['tag_name']}_win64.zip"
+                    self._download_file(file_url, zip_path)
+                    
+                    self.extract_zip(zip_path, version_tag)
+                    
+                    self.show_info_message("Успешно!", f"Версия {version_tag} успешно скачана и распакована!")
+                else:
+                    self.show_error_message("Ошибка", f"Не найден файл с win64.zip в релизе {version_tag}.")
             else:
-                self.show_error_message("Ошибка", f"Не удалось скачать файл для версии {version_tag}. Код ошибки: {response.status_code}\nверсия была получена не правильно или установка отличается от ожидаемой. Ну или вы пытаетесь скачать свою версию из папки версий.")
+                self.show_error_message("Ошибка", f"Не удалось получить информацию о релизе для версии {version_tag}. Код ошибки: {response.status_code}")
+        
         except Exception as e:
             self.show_error_message("Ошибка", f"Ошибка при скачивании или распаковке: {e}")
-
+    
+    def _download_file(self, file_url, zip_path):
+        """Скачивает файл по URL и сохраняет в указанном пути"""
+        response = requests.get(file_url)
+        if response.status_code == 200:
+            with open(zip_path, "wb") as f:
+                f.write(response.content)
+        else:
+            raise Exception(f"Не удалось скачать файл. Код ошибки: {response.status_code}")
+    
     def extract_zip(self, zip_path, version_tag):
         """
         Распаковывает ZIP-файл в нужную директорию.
@@ -396,32 +418,25 @@ class FLauncher(QMainWindow):
 
                 release_url = release.get('html_url', '#')
 
-                # Получаем дату релиза
                 release_date_str = release.get('published_at', '')
                 if release_date_str:
                     release_date = datetime.strptime(release_date_str, '%Y-%m-%dT%H:%M:%SZ')
                     release_date_formatted = release_date.strftime('%d %B %Y')
 
-                # Создаем горизонтальный layout для версии и даты
                 release_layout = QHBoxLayout()
 
-                # Создаем метку для версии
                 version_label = QLabel(f'VoxelCore<a href="{release_url}"> {version}</a>', self)
                 version_label.setStyleSheet("font-weight: bold; font-size: 24px; color: black;")
                 version_label.setOpenExternalLinks(True)
 
-                # Создаем метку с датой
                 date_label = QLabel(f'Дата релиза: {release_date_formatted}', self)
                 date_label.setStyleSheet("font-size: 12px; color: gray; margin-left: 10px;")
 
-                # Добавляем метки в горизонтальный layout
                 release_layout.addWidget(version_label)
                 release_layout.addWidget(date_label)
 
-                # Добавляем горизонтальный layout в основной layout
                 layout.addLayout(release_layout)
 
-                # Добавляем описание релиза
                 release_body = release['body']
                 html_body = markdown.markdown(release_body)
                 html_body = html_body.replace('<a', '<a target="_blank"')
@@ -433,14 +448,12 @@ class FLauncher(QMainWindow):
                 release_info_label.setStyleSheet("font-weight: bold; font-size: 14px; line-height: 1.5; color: black;")
                 layout.addWidget(release_info_label)
 
-                # Разделитель между релизами
                 separator = QFrame(self)
                 separator.setFrameShape(QFrame.HLine)
                 separator.setFrameShadow(QFrame.Sunken)
                 separator.setStyleSheet("background-color: black; height: 2px;")
                 layout.addWidget(separator)
 
-                # Разделитель для пространства между элементами
                 layout.addItem(QSpacerItem(20, 10, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
                 count += 1
