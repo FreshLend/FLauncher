@@ -1,7 +1,7 @@
 import sys, os, subprocess, zipfile, shutil, requests, markdown
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QScrollArea, QLabel, QSpacerItem, QSizePolicy, QFrame, QPushButton, QComboBox, QMessageBox, QHBoxLayout
 from PyQt5.QtGui import QPalette, QBrush, QImage, QDesktopServices, QIcon
-from PyQt5.QtCore import Qt, QTimer, QUrl, QSize
+from PyQt5.QtCore import Qt, QUrl, QSize
 from pathlib import Path
 from datetime import datetime
 
