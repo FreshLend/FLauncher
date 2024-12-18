@@ -1,12 +1,11 @@
-import sys, os, subprocess, zipfile, shutil, requests, markdown
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QScrollArea, QLabel, QSpacerItem, QSizePolicy, QFrame, QPushButton, QComboBox, QMessageBox, QHBoxLayout
+import sys, os, subprocess, zipfile, shutil, requests, markdown, time
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QScrollArea, QLabel, QSpacerItem, QSizePolicy, QFrame, QPushButton, QComboBox, QMessageBox, QHBoxLayout, QProgressBar
 from PyQt5.QtGui import QPalette, QBrush, QImage, QDesktopServices, QIcon
-from PyQt5.QtCore import Qt, QUrl, QSize
+from PyQt5.QtCore import Qt, QUrl, QSize, QCoreApplication
 from pathlib import Path
 from datetime import datetime
 
 def resource_path(relative_path):
-        """Получить абсолютный путь к ресурсу, независимо от того, запущена ли программа как .exe или нет."""
         try:
             if hasattr(sys, '_MEIPASS'):
                 return os.path.join(sys._MEIPASS, relative_path)
@@ -40,21 +39,32 @@ class FLauncher(QMainWindow):
 
     def add_blue_bar(self):
         blue_bar = QWidget(self)
-        blue_bar.setGeometry(0, self.height() - 80, self.width(), 80)
+        blue_bar.setGeometry(0, self.height() - 90, self.width(), 90)
         blue_bar.setStyleSheet("background-color: rgba(114, 241, 89, 0.8);")
 
         self.version_combo = QComboBox(blue_bar)
-        self.version_combo.setGeometry(10, 10, 200, 60)
+        self.version_combo.setGeometry(10, 20, 200, 60)
         self.version_combo.setStyleSheet("background-color: white; color: black; font-size: 18px; font-weight: bold;")
         self.version_combo.addItem("Получение версий...")
 
         self.download_button = QPushButton("Скачать", blue_bar)
-        self.download_button.setGeometry(220, 10, 150, 30)
+        self.download_button.setGeometry(220, 20, 150, 30)
         self.download_button.setStyleSheet("background-color: rgb(240, 207, 61); color: white; font-size: 18px; font-weight: bold;")
         self.download_button.clicked.connect(self.on_download_button_click)
 
+        self.progress_bar = QProgressBar(blue_bar)
+        self.progress_bar.setGeometry(10, 0, self.width() - 20, 20)
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setTextVisible(False)
+
+        self.download_info_label = QLabel("0 KB / 0 KB, Скорость: 0 KB/s", blue_bar)
+        self.download_info_label.setGeometry(10, 0, self.width() - 20, 20)
+        self.download_info_label.setStyleSheet("font-size: 12px; color: black;")
+        self.download_info_label.setAlignment(Qt.AlignCenter)
+
         self.play_button = QPushButton("Играть", blue_bar)
-        self.play_button.setGeometry(220, 40, 150, 30)
+        self.play_button.setGeometry(220, 50, 150, 30)
         self.play_button.setStyleSheet("background-color: rgb(240, 207, 61); color: white; font-size: 18px; font-weight: bold;")
         self.play_button.clicked.connect(self.on_play_button_click)
 
@@ -62,7 +72,7 @@ class FLauncher(QMainWindow):
         self.reload_button = QPushButton(blue_bar)
         self.reload_button.setIcon(icon_reload)
         self.reload_button.setIconSize(QSize(60, 60))
-        self.reload_button.setGeometry(835, 10, 60, 60)
+        self.reload_button.setGeometry(835, 20, 60, 60)
         self.reload_button.setStyleSheet("""
             QPushButton {
                 border: none;
@@ -77,7 +87,7 @@ class FLauncher(QMainWindow):
         self.vwm_button = QPushButton(blue_bar)
         self.vwm_button.setIcon(icon_vwm)
         self.vwm_button.setIconSize(QSize(30, 30))
-        self.vwm_button.setGeometry(895, 10, 60, 60)
+        self.vwm_button.setGeometry(895, 20, 60, 60)
         self.vwm_button.setStyleSheet("""
             QPushButton {
                 border: none;
@@ -92,7 +102,7 @@ class FLauncher(QMainWindow):
         self.folder_button = QPushButton(blue_bar)
         self.folder_button.setIcon(icon_folder)
         self.folder_button.setIconSize(QSize(30, 30))
-        self.folder_button.setGeometry(965, 10, 60, 60)
+        self.folder_button.setGeometry(965, 20, 60, 60)
         self.folder_button.setStyleSheet("""
             QPushButton {
                 border: none;
@@ -107,7 +117,7 @@ class FLauncher(QMainWindow):
         self.settings_button = QPushButton(blue_bar)
         self.settings_button.setIcon(icon_settings)
         self.settings_button.setIconSize(QSize(30, 30))
-        self.settings_button.setGeometry(1035, 10, 60, 60)
+        self.settings_button.setGeometry(1035, 20, 60, 60)
         self.settings_button.setStyleSheet("""
             QPushButton {
                 border: none;
@@ -120,21 +130,21 @@ class FLauncher(QMainWindow):
 
     def add_release_panel(self):
         release_panel = QWidget(self)
-        release_panel.setGeometry(20, 40, 700, self.height() - 120)
+        release_panel.setGeometry(20, 40, 700, self.height() - 130)
         release_panel.setStyleSheet("background-color: rgba(255, 255, 255, 0.7);")
 
         release_layout = QVBoxLayout(release_panel)
 
         scroll_area = QScrollArea(self)
         scroll_area.setWidget(release_panel)
-        scroll_area.setGeometry(20, 40, 800, self.height() - 120)
+        scroll_area.setGeometry(20, 40, 800, self.height() - 130)
         scroll_area.setWidgetResizable(True)
 
         self.get_github_releases(release_layout)
 
     def add_info_panel(self):
         info_panel = QWidget(self)
-        info_panel.setGeometry(830, 40, 250, self.height() - 120)
+        info_panel.setGeometry(830, 0, 250, self.height() - 90)
         info_panel.setStyleSheet("background-color: rgba(73, 171, 209, 0.7);")
 
         info_layout = QVBoxLayout(info_panel)
@@ -235,11 +245,8 @@ class FLauncher(QMainWindow):
             self.show_error_message("Ошибка запуска", f"Не удалось запустить игру: {str(e)}")
 
     def download_and_extract_version(self, version_tag):
-        """
-        Скачивает архив с версией с GitHub, распаковывает и сохраняет в директорию versions.
-        Ищет файл с win64.zip в релизах.
-        """
         try:
+            self.download_start_time = time.time()
             api_url = f"https://api.github.com/repos/MihailRis/VoxelEngine-Cpp/releases/tags/{version_tag}"
             
             response = requests.get(api_url)
@@ -268,19 +275,37 @@ class FLauncher(QMainWindow):
             self.show_error_message("Ошибка", f"Ошибка при скачивании или распаковке: {e}")
     
     def _download_file(self, file_url, zip_path):
-        """Скачивает файл по URL и сохраняет в указанном пути"""
-        response = requests.get(file_url)
+        response = requests.get(file_url, stream=True)
+        
         if response.status_code == 200:
-            with open(zip_path, "wb") as f:
-                f.write(response.content)
+            total_size = int(response.headers.get('Content-Length', 0))
+            downloaded_size = 0
+            chunk_size = 1024
+
+            with open(zip_path, 'wb') as f:
+                for data in response.iter_content(chunk_size=chunk_size):
+                    downloaded_size += len(data)
+                    f.write(data)
+                    
+                    progress = int((downloaded_size / total_size) * 100)
+                    self.progress_bar.setValue(progress)
+                    
+                    speed = (downloaded_size / 1024) / (time.time() - self.download_start_time)
+                    remaining_size = total_size - downloaded_size
+                    remaining_time = remaining_size / (speed * 1024) if speed > 0 else 0
+                    remaining_time_str = time.strftime("%H:%M:%S", time.gmtime(remaining_time))
+
+                    downloaded_size_kb = downloaded_size / 1024
+                    total_size_kb = total_size / 1024
+                    self.download_info_label.setText(f"{downloaded_size_kb:.2f} KB / {total_size_kb:.2f} KB, "
+                                                    f"Скорость: {speed:.2f} KB/s, Осталось: {remaining_time_str}")
+
+                    QCoreApplication.processEvents()
+
         else:
             raise Exception(f"Не удалось скачать файл. Код ошибки: {response.status_code}")
     
     def extract_zip(self, zip_path, version_tag):
-        """
-        Распаковывает ZIP-файл в нужную директорию.
-        Извлекает содержимое архива в папку, соответствующую версии.
-        """
         try:
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                 extraction_path = self.app_data_path / version_tag
@@ -342,7 +367,7 @@ class FLauncher(QMainWindow):
                     self.version_combo.setCurrentIndex(0)
 
         except Exception as e:
-            self.show_error_message("Ошибка", f"Ошибка при загрузке версий: {e}")
+            print(f"Ошибка при загрузке версий: {e}\nВозможно у вас нет интернет соеденения.")
             self.version_combo.clear()
             user_versions = self.get_user_versions()
             
@@ -390,9 +415,6 @@ class FLauncher(QMainWindow):
                 self.version_combo.addItem(version)
 
     def get_user_versions(self):
-        """
-        Получаем список пользовательских версий из папок в директории версий.
-        """
         user_versions = []
         if self.app_data_path.exists():
             for folder in self.app_data_path.iterdir():
@@ -402,9 +424,10 @@ class FLauncher(QMainWindow):
 
     def get_github_releases(self, layout):
         url = "https://api.github.com/repos/MihailRis/VoxelEngine-Cpp/releases"
-
+        
         try:
             response = requests.get(url)
+            response.raise_for_status()
             releases = response.json()
 
             count = 0
@@ -413,53 +436,59 @@ class FLauncher(QMainWindow):
                 if count >= 30:
                     break
 
-                tag_name = release.get('tag_name', '')
-                version = tag_name.replace('voxelcore', '').strip()
+                if isinstance(release, dict):
+                    tag_name = release.get('tag_name', '')
+                    version = tag_name.replace('voxelcore', '').strip()
 
-                release_url = release.get('html_url', '#')
+                    release_url = release.get('html_url', '#')
 
-                release_date_str = release.get('published_at', '')
-                if release_date_str:
-                    release_date = datetime.strptime(release_date_str, '%Y-%m-%dT%H:%M:%SZ')
-                    release_date_formatted = release_date.strftime('%d %B %Y')
+                    release_date_str = release.get('published_at', '')
+                    if release_date_str:
+                        release_date = datetime.strptime(release_date_str, '%Y-%m-%dT%H:%M:%SZ')
+                        release_date_formatted = release_date.strftime('%d %B %Y')
 
-                release_layout = QHBoxLayout()
+                    release_layout = QHBoxLayout()
 
-                version_label = QLabel(f'VoxelCore<a href="{release_url}"> {version}</a>', self)
-                version_label.setStyleSheet("font-weight: bold; font-size: 24px; color: black;")
-                version_label.setOpenExternalLinks(True)
+                    version_label = QLabel(f'VoxelCore<a href="{release_url}"> {version}</a>', self)
+                    version_label.setStyleSheet("font-weight: bold; font-size: 24px; color: black;")
+                    version_label.setOpenExternalLinks(True)
 
-                date_label = QLabel(f'Дата релиза: {release_date_formatted}', self)
-                date_label.setStyleSheet("font-size: 12px; color: gray; margin-left: 10px;")
+                    date_label = QLabel(f'Дата релиза: {release_date_formatted}', self)
+                    date_label.setStyleSheet("font-size: 12px; color: gray; margin-left: 10px;")
 
-                release_layout.addWidget(version_label)
-                release_layout.addWidget(date_label)
+                    release_layout.addWidget(version_label)
+                    release_layout.addWidget(date_label)
 
-                layout.addLayout(release_layout)
+                    layout.addLayout(release_layout)
 
-                release_body = release['body']
-                html_body = markdown.markdown(release_body)
-                html_body = html_body.replace('<a', '<a target="_blank"')
+                    release_body = release.get('body', '')
+                    html_body = markdown.markdown(release_body)
+                    html_body = html_body.replace('<a', '<a target="_blank"')
 
-                release_info_label = QLabel(self)
-                release_info_label.setOpenExternalLinks(True)
-                release_info_label.setText(html_body)
-                release_info_label.setWordWrap(True)
-                release_info_label.setStyleSheet("font-weight: bold; font-size: 14px; line-height: 1.5; color: black;")
-                layout.addWidget(release_info_label)
+                    release_info_label = QLabel(self)
+                    release_info_label.setOpenExternalLinks(True)
+                    release_info_label.setText(html_body)
+                    release_info_label.setWordWrap(True)
+                    release_info_label.setStyleSheet("font-weight: bold; font-size: 14px; line-height: 1.5; color: black;")
+                    layout.addWidget(release_info_label)
 
-                separator = QFrame(self)
-                separator.setFrameShape(QFrame.HLine)
-                separator.setFrameShadow(QFrame.Sunken)
-                separator.setStyleSheet("background-color: black; height: 2px;")
-                layout.addWidget(separator)
+                    separator = QFrame(self)
+                    separator.setFrameShape(QFrame.HLine)
+                    separator.setFrameShadow(QFrame.Sunken)
+                    separator.setStyleSheet("background-color: black; height: 2px;")
+                    layout.addWidget(separator)
 
-                layout.addItem(QSpacerItem(20, 10, QSizePolicy.Minimum, QSizePolicy.Expanding))
+                    layout.addItem(QSpacerItem(20, 10, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
-                count += 1
+                    count += 1
 
         except requests.RequestException as e:
             error_label = QLabel("Не удалось загрузить релизы.", self)
+            error_label.setStyleSheet("font-size: 18px; color: red;")
+            layout.addWidget(error_label)
+
+        except ValueError as e:
+            error_label = QLabel("Ошибка при обработке данных.", self)
             error_label.setStyleSheet("font-size: 18px; color: red;")
             layout.addWidget(error_label)
 
