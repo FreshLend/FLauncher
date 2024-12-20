@@ -40,7 +40,7 @@ class FLauncher(QMainWindow):
     def add_blue_bar(self):
         blue_bar = QWidget(self)
         blue_bar.setGeometry(0, self.height() - 90, self.width(), 90)
-        blue_bar.setStyleSheet("background-color: rgba(114, 241, 89, 0.8);")
+        blue_bar.setStyleSheet("background-color: rgba(113, 169, 76, 0.9);")
 
         self.version_combo = QComboBox(blue_bar)
         self.version_combo.setGeometry(10, 20, 200, 60)
@@ -49,7 +49,7 @@ class FLauncher(QMainWindow):
 
         self.download_button = QPushButton("Скачать", blue_bar)
         self.download_button.setGeometry(220, 20, 150, 30)
-        self.download_button.setStyleSheet("background-color: rgb(240, 207, 61); color: white; font-size: 18px; font-weight: bold;")
+        self.download_button.setStyleSheet("background-color: rgb(236, 193, 63); color: white; font-size: 18px; font-weight: bold;")
         self.download_button.clicked.connect(self.on_download_button_click)
 
         self.progress_bar = QProgressBar(blue_bar)
@@ -65,14 +65,29 @@ class FLauncher(QMainWindow):
 
         self.play_button = QPushButton("Играть", blue_bar)
         self.play_button.setGeometry(220, 50, 150, 30)
-        self.play_button.setStyleSheet("background-color: rgb(240, 207, 61); color: white; font-size: 18px; font-weight: bold;")
+        self.play_button.setStyleSheet("background-color: rgb(236, 193, 63); color: white; font-size: 18px; font-weight: bold;")
         self.play_button.clicked.connect(self.on_play_button_click)
 
-        icon_reload = QIcon(resource_path("ui/FLM.png"))
+        icon_flm = QIcon(resource_path("ui/FLM.png"))
+        self.flm_button = QPushButton(blue_bar)
+        self.flm_button.setIcon(icon_flm)
+        self.flm_button.setIconSize(QSize(60, 60))
+        self.flm_button.setGeometry(835, 20, 60, 60)
+        self.flm_button.setStyleSheet("""
+            QPushButton {
+                border: none;
+                background-color: transparent;
+                padding: 0;
+                outline: none;
+            }
+        """)
+        self.flm_button.clicked.connect(self.on_flm_button_click)
+
+        icon_reload = QIcon(resource_path("ui/reload.png"))
         self.reload_button = QPushButton(blue_bar)
         self.reload_button.setIcon(icon_reload)
-        self.reload_button.setIconSize(QSize(60, 60))
-        self.reload_button.setGeometry(835, 20, 60, 60)
+        self.reload_button.setIconSize(QSize(30, 30))
+        self.reload_button.setGeometry(895, 20, 60, 60)
         self.reload_button.setStyleSheet("""
             QPushButton {
                 border: none;
@@ -81,22 +96,7 @@ class FLauncher(QMainWindow):
                 outline: none;
             }
         """)
-        self.reload_button.clicked.connect(self.on_vwm_button_click)
-
-        icon_vwm = QIcon(resource_path("ui/reload.png"))
-        self.vwm_button = QPushButton(blue_bar)
-        self.vwm_button.setIcon(icon_vwm)
-        self.vwm_button.setIconSize(QSize(30, 30))
-        self.vwm_button.setGeometry(895, 20, 60, 60)
-        self.vwm_button.setStyleSheet("""
-            QPushButton {
-                border: none;
-                background-color: transparent;
-                padding: 0;
-                outline: none;
-            }
-        """)
-        self.vwm_button.clicked.connect(self.refresh_versions)
+        self.reload_button.clicked.connect(self.refresh_versions)
 
         icon_folder = QIcon(resource_path("ui/folder.png"))
         self.folder_button = QPushButton(blue_bar)
@@ -145,14 +145,14 @@ class FLauncher(QMainWindow):
     def add_info_panel(self):
         info_panel = QWidget(self)
         info_panel.setGeometry(830, 0, 250, self.height() - 90)
-        info_panel.setStyleSheet("background-color: rgba(73, 171, 209, 0.7);")
+        info_panel.setStyleSheet("background-color: rgba(90, 171, 215, 0.9);")
 
         info_layout = QVBoxLayout(info_panel)
 
         label = QLabel(info_panel)
         label.setAlignment(Qt.AlignCenter)
         label.setText('''
-            <div style="background-color: rgba(73, 171, 209, 0.5); padding: 10px;">
+            <div style="background-color: rgba(90, 171, 215, 0.9); padding: 10px;">
                 <span style="font-size: 30px; font-weight: bold; color: white;">
                     FLAUNCHER
                 </span><br>
@@ -214,7 +214,7 @@ class FLauncher(QMainWindow):
     def refresh_versions(self):
         self.load_versions()
 
-    def on_vwm_button_click(self):
+    def on_flm_button_click(self):
         self.show_info_message("Скоро...", "Страница с модами будет когда-то...\nа пока ИДИ ИГРАЙ ИЛИ МОДЫ ДЕЛАЙ!")
 
     def open_versions_folder(self):
