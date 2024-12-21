@@ -1,9 +1,10 @@
-import sys, os, subprocess, zipfile, shutil, requests, markdown, time
+import sys, os, subprocess, zipfile, shutil, requests, markdown, time, threading, asyncio
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QScrollArea, QLabel, QSpacerItem, QSizePolicy, QFrame, QPushButton, QComboBox, QMessageBox, QHBoxLayout, QProgressBar
 from PyQt5.QtGui import QPalette, QBrush, QImage, QDesktopServices, QIcon
 from PyQt5.QtCore import Qt, QUrl, QSize, QCoreApplication
 from pathlib import Path
 from datetime import datetime
+from pypresence import Presence
 
 def resource_path(relative_path):
         try:
@@ -21,13 +22,58 @@ class FLauncher(QMainWindow):
         self.setFixedSize(1100, 650)
         self.setWindowTitle('FLauncher')
 
+        self.client_id = "1143147014226444338"
+        self.discord_presence = Presence(self.client_id)
+        self.discord_presence.connect()
+        self.setDiscordPresence(active=True)
+
         self.add_release_panel()
         self.add_info_panel()
-        
         self.set_background()
         self.add_blue_bar()
         self.create_app_data_directory()
         self.load_versions()
+
+    def setDiscordPresence(self, active):
+        if active:
+            state = "active"
+            details = "Просматривает главную страницу"
+        else:
+            state = "idle"
+            details = "Просматривает главную страницу"
+
+        threading.Thread(target=self.updatePresenceAsync, args=(state, details)).start()
+        
+    def updatePresenceAsync(self, state, details):
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            self.discord_presence.update(
+                state=state,
+                details=details,
+                start=time.time(),
+                large_image="icon"
+            )
+        except Exception as e:
+            print(f"Ошибка при обновлении статуса Discord: {e}")
+
+    def changeState(self):
+        if self.isMinimized():
+            self.setDiscordPresence(active=False)
+        else:
+            self.setDiscordPresence(active=True)
+
+    def closeEvent(self, event):
+        self.discord_presence.close()
+        event.accept()
+
+    def showEvent(self, event):
+        self.setDiscordPresence(active=True)
+        event.accept()
+
+    def hideEvent(self, event):
+        self.setDiscordPresence(active=False)
+        event.accept()
 
     def set_background(self):
         self.setAutoFillBackground(True)
