@@ -1,5 +1,7 @@
+# -*- coding: utf-8 -*-
+
 import sys, os, subprocess, zipfile, shutil, requests, markdown, time, threading, asyncio
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QScrollArea, QLabel, QSpacerItem, QSizePolicy, QFrame, QPushButton, QComboBox, QMessageBox, QHBoxLayout, QProgressBar
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QScrollArea, QLabel, QSpacerItem, QSizePolicy, QFrame, QPushButton, QComboBox, QMessageBox, QHBoxLayout, QProgressBar, QTextBrowser
 from PyQt5.QtGui import QPalette, QBrush, QImage, QDesktopServices, QIcon
 from PyQt5.QtCore import Qt, QUrl, QSize, QCoreApplication
 from pathlib import Path
@@ -24,56 +26,47 @@ class FLauncher(QMainWindow):
 
         self.client_id = "1143147014226444338"
         self.discord_presence = Presence(self.client_id)
-        self.discord_presence.connect()
-        self.setDiscordPresence(active=True)
+        self.discord_presence = None
+        self.connectToDiscord()
+        self.setDiscordPresence()
 
         self.add_release_panel()
         self.add_info_panel()
+        self.add_settings_panel()
+        self.add_FL_MODS()
         self.set_background()
         self.add_blue_bar()
         self.create_app_data_directory()
         self.load_versions()
 
-    def setDiscordPresence(self, active):
-        if active:
-            state = "active"
-            details = "Просматривает главную страницу"
-        else:
-            state = "idle"
-            details = "Просматривает главную страницу"
+    def connectToDiscord(self):
+        try:
+            self.discord_presence = Presence(self.client_id)
+            self.discord_presence.connect()
+        except Exception as e:
+            print(f"Ошибка при подключении к Discord: {e}")
+            self.discord_presence = None
 
-        threading.Thread(target=self.updatePresenceAsync, args=(state, details)).start()
-        
-    def updatePresenceAsync(self, state, details):
+    def setDiscordPresence(self):
+        if self.discord_presence:
+            details = "Просматривает главную страницу"
+            threading.Thread(target=self.updatePresenceAsync, args=(details,)).start()
+
+    def updatePresenceAsync(self, details):
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            self.discord_presence.update(
-                state=state,
-                details=details,
-                start=time.time(),
-                large_image="icon"
-            )
+
+            if self.discord_presence:
+                self.discord_presence.update(
+                    details=details,
+                    start=time.time(),
+                    large_image="icon"
+                )
+            else:
+                pass
         except Exception as e:
             print(f"Ошибка при обновлении статуса Discord: {e}")
-
-    def changeState(self):
-        if self.isMinimized():
-            self.setDiscordPresence(active=False)
-        else:
-            self.setDiscordPresence(active=True)
-
-    def closeEvent(self, event):
-        self.discord_presence.close()
-        event.accept()
-
-    def showEvent(self, event):
-        self.setDiscordPresence(active=True)
-        event.accept()
-
-    def hideEvent(self, event):
-        self.setDiscordPresence(active=False)
-        event.accept()
 
     def set_background(self):
         self.setAutoFillBackground(True)
@@ -227,6 +220,96 @@ class FLauncher(QMainWindow):
 
         info_layout.addStretch(1)
 
+    def add_settings_panel(self):
+        self.settings_background = QWidget(self)
+        self.settings_background.setGeometry(0, 0, 1100, self.height())
+
+        self.settings_panel = QWidget(self)
+        self.settings_panel.setGeometry(200, 20, 700, self.height() - 130)
+        self.settings_panel.setStyleSheet("background-color: white;")
+
+        self.blue_strip = QWidget(self.settings_panel)
+        self.blue_strip.setGeometry(0, 0, self.settings_panel.width(), 40)
+        self.blue_strip.setStyleSheet("background-color: #00aaff;")
+
+        blue_layout = QHBoxLayout(self.blue_strip)
+
+        settings_label = QLabel('Настройки', self.blue_strip)
+        settings_label.setAlignment(Qt.AlignCenter)
+        settings_label.setStyleSheet("font-size: 18px; font-weight: bold; color: white;")
+        blue_layout.addWidget(settings_label)
+
+        blue_layout.setContentsMargins(10, 0, 10, 0)
+        blue_layout.setSpacing(10)
+
+        blue_layout.setStretch(1, 1)
+
+        layout = QVBoxLayout(self.settings_panel)
+
+        text_browser = QTextBrowser(self.settings_panel)
+        text_browser.setAlignment(Qt.AlignTop)
+        text_browser.setText('''
+            <div>
+                <span style="font-size: 16px; font-weight: normal; color: black;">
+                    Настроек пока что нет, появится когда я захочу, это будет через неизвестное время, так что ждите сто лет, у меня много других проектов, а я такой человек тот кто не доделывает проекты, мне больше интересна разработка искуственного интеллекта и создание новых проектов.<br>Просто ожидайте...<br>Сейчас максимум баги или обнову для онлайн сделаю когда он выйдет, ну и идея у меня есть создать сайт и контент-пак для достижений в игре и сколько времени вы провели в игре (не планирую создавать это просто идея, можете смело реализовать её в своих проектах), а на этом я прощаюсь, слишком много пишу, я всегда такой...<br><a href="https://discord.com/oauth2/authorize?client_id=1137405206288666634" style="color: blue; text-decoration: underline;">Оцените мой проект: Petya_Ai (искуственный интеллект, пока что тупой, но он с самообучением, умеет использовать кастомные эмодзи по смыслу, но не всегда. ещё умеет аудио отправлять и планирую возможность говорить в голосовом добавить. одноздачно повеселит.)</a><br>но запускаю я его не часто так как у меня нет видеокарты поддерживающей ИИ, а процессора для моего ИИ скоро будет не хватать так как он его уже грузит на 80% при генерации токенов.<br>Видеокарта: GTX550Ti<br>ЦП: Intel Core i7-3770k<br>ОЗУ: 8Gb
+                </span>
+            </div>
+        ''')
+        text_browser.setOpenExternalLinks(True)
+
+        layout.addWidget(text_browser)
+
+        layout.setContentsMargins(10, 40, 10, 10)
+        layout.setSpacing(20)
+
+        self.settings_panel.hide()
+        self.settings_background.hide()
+
+    def add_FL_MODS(self):
+        self.FL_MODS_background = QWidget(self)
+        self.FL_MODS_background.setGeometry(0, 0, 1100, self.height())
+
+        self.FL_MODS = QWidget(self)
+        self.FL_MODS.setGeometry(200, 20, 700, self.height() - 130)
+        self.FL_MODS.setStyleSheet("background-color: white;")
+
+        self.blue_strip = QWidget(self.FL_MODS)
+        self.blue_strip.setGeometry(0, 0, self.FL_MODS.width(), 40)
+        self.blue_strip.setStyleSheet("background-color: #00aaff;")
+
+        blue_layout = QHBoxLayout(self.blue_strip)
+
+        settings_label = QLabel('FLMODS', self.blue_strip)
+        settings_label.setAlignment(Qt.AlignCenter)
+        settings_label.setStyleSheet("font-size: 18px; font-weight: bold; color: white;")
+        blue_layout.addWidget(settings_label)
+
+        blue_layout.setContentsMargins(10, 0, 10, 0)
+        blue_layout.setSpacing(10)
+
+        blue_layout.setStretch(1, 1)
+
+        layout = QVBoxLayout(self.FL_MODS)
+
+        text_browser = QTextBrowser(self.FL_MODS)
+        text_browser.setAlignment(Qt.AlignTop)
+        text_browser.setText('''
+            <div>
+                <span style="font-size: 16px; font-weight: normal; color: black;">
+                    Страницы модов пока что нет... появится когда я захочу, это будет через неизвестное время, так что ждите сто лет, у меня много других проектов, а я такой человек тот кто не доделывает проекты, мне больше интересна разработка искуственного интеллекта и создание новых проектов.<br>Просто ожидайте...<br>Сейчас максимум баги или обнову для онлайн сделаю когда он выйдет, ну и идея у меня есть создать сайт и контент-пак для достижений в игре и сколько времени вы провели в игре (не планирую создавать это просто идея, можете смело реализовать её в своих проектах), а на этом я прощаюсь, слишком много пишу, я всегда такой...<br><a href="https://discord.com/oauth2/authorize?client_id=1137405206288666634" style="color: blue; text-decoration: underline;">Оцените мой проект: Petya_Ai (искуственный интеллект, пока что тупой, но он с самообучением, умеет использовать кастомные эмодзи по смыслу, но не всегда. ещё умеет аудио отправлять и планирую возможность говорить в голосовом добавить. одноздачно повеселит.)</a><br>но запускаю я его не часто так как у меня нет видеокарты поддерживающей ИИ, а процессора для моего ИИ скоро будет не хватать так как он его уже грузит на 80% при генерации токенов.<br>Видеокарта: GTX550Ti<br>ЦП: Intel Core i7-3770k<br>ОЗУ: 8Gb
+                </span>
+            </div>
+        ''')
+        text_browser.setOpenExternalLinks(True)
+
+        layout.addWidget(text_browser)
+
+        layout.setContentsMargins(10, 40, 10, 10)
+        layout.setSpacing(20)
+
+        self.FL_MODS.hide()
+        self.FL_MODS_background.hide()
+
     def on_download_button_click(self):
         selected_version = self.version_combo.currentText()
 
@@ -261,14 +344,24 @@ class FLauncher(QMainWindow):
         self.load_versions()
 
     def on_flm_button_click(self):
-        self.show_info_message("Скоро...", "Страница с модами будет когда-то...\nа пока ИДИ ИГРАЙ ИЛИ МОДЫ ДЕЛАЙ!")
+        if self.FL_MODS.isVisible():
+            self.FL_MODS.hide()
+            self.FL_MODS_background.hide()
+        else:
+            self.FL_MODS.show()
+            self.FL_MODS_background.show()
 
     def open_versions_folder(self):
         url = QUrl.fromLocalFile(str(self.app_data_path))
         QDesktopServices.openUrl(url)
 
     def open_settings(self):
-        self.show_info_message("Скоро...", "Настройки появятся через 10 веков!")
+        if self.settings_panel.isVisible():
+            self.settings_panel.hide()
+            self.settings_background.hide()
+        else:
+            self.settings_panel.show()
+            self.settings_background.show()
 
     def show_error_message(self, title, message):
         msg = QMessageBox()
