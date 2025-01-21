@@ -22,7 +22,7 @@ class FLauncher(QMainWindow):
 
         self.setGeometry(100, 100, 1100, 650)
         self.setFixedSize(1100, 650)
-        self.setWindowTitle('FLauncher')
+        self.setWindowTitle('FLauncher (0.2.5)')
 
         self.client_id = "1143147014226444338"
         self.discord_presence = Presence(self.client_id)
