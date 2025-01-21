@@ -251,7 +251,7 @@ class FLauncher(QMainWindow):
         text_browser.setText('''
             <div>
                 <span style="font-size: 16px; font-weight: normal; color: black;">
-                    Настроек пока что нет, появится когда я захочу, это будет через неизвестное время, так что ждите сто лет, у меня много других проектов, а я такой человек тот кто не доделывает проекты, мне больше интересна разработка искуственного интеллекта и создание новых проектов.<br>Просто ожидайте...<br>Сейчас максимум баги или обнову для онлайн сделаю когда он выйдет, ну и идея у меня есть создать сайт и контент-пак для достижений в игре и сколько времени вы провели в игре (не планирую создавать это просто идея, можете смело реализовать её в своих проектах), а на этом я прощаюсь, слишком много пишу, я всегда такой...<br><a href="https://discord.com/oauth2/authorize?client_id=1137405206288666634" style="color: blue; text-decoration: underline;">Оцените мой проект: Petya_Ai (искуственный интеллект, пока что тупой, но он с самообучением, умеет использовать кастомные эмодзи по смыслу, но не всегда. ещё умеет аудио отправлять и планирую возможность говорить в голосовом добавить. одноздачно повеселит.)</a><br>но запускаю я его не часто так как у меня нет видеокарты поддерживающей ИИ, а процессора для моего ИИ скоро будет не хватать так как он его уже грузит на 80% при генерации токенов.<br>Видеокарта: GTX550Ti<br>ЦП: Intel Core i7-3770k<br>ОЗУ: 8Gb
+                    Настроек пока что нет, появится когда я захочу, это будет через неизвестное время, так что ждите сто лет, у меня много других проектов, а я такой человек тот кто не доделывает проекты, мне больше интересна разработка искуственного интеллекта и создание новых проектов.<br>Просто ожидайте...<br>Сейчас максимум баги или обнову для онлайн сделаю когда он выйдет, ну и идея у меня есть создать сайт и контент-пак для достижений в игре и сколько времени вы провели в игре (не планирую создавать это просто идея, можете смело реализовать её в своих проектах), а на этом я прощаюсь, слишком много пишу, я всегда такой...<br><a href="https://discord.com/oauth2/authorize?client_id=1137405206288666634" style="color: blue; text-decoration: underline;">Оцените мой проект: Petya_Ai (искуственный интеллект, пока что тупой, но он с самообучением, умеет использовать кастомные эмодзи по смыслу, но не всегда. ещё умеет аудио отправлять и планирую возможность говорить в голосовом добавить. одноздачно повеселит.)</a><br><a href="http://f1.aurorix.net:38052" style="color: blue; text-decoration: underline;">FreshTube - копия (вообще не копия) ютуба</a><br>но запускаю я его не часто так как у меня нет видеокарты поддерживающей ИИ, а процессора для моего ИИ скоро будет не хватать так как он его уже грузит на 80% при генерации токенов.<br>Видеокарта: GTX550Ti<br>ЦП: Intel Core i7-3770k<br>ОЗУ: 8Gb
                 </span>
             </div>
         ''')
@@ -270,7 +270,7 @@ class FLauncher(QMainWindow):
         self.FL_MODS_background.setGeometry(0, 0, 1100, self.height())
 
         self.FL_MODS = QWidget(self)
-        self.FL_MODS.setGeometry(200, 20, 700, self.height() - 130)
+        self.FL_MODS.setGeometry(0, 0, 1100, self.height() - 90)
         self.FL_MODS.setStyleSheet("background-color: white;")
 
         self.blue_strip = QWidget(self.FL_MODS)
@@ -279,10 +279,10 @@ class FLauncher(QMainWindow):
 
         blue_layout = QHBoxLayout(self.blue_strip)
 
-        settings_label = QLabel('FLMODS', self.blue_strip)
-        settings_label.setAlignment(Qt.AlignCenter)
-        settings_label.setStyleSheet("font-size: 18px; font-weight: bold; color: white;")
-        blue_layout.addWidget(settings_label)
+        FL_MODS_label = QLabel('FLMODS', self.blue_strip)
+        FL_MODS_label.setAlignment(Qt.AlignCenter)
+        FL_MODS_label.setStyleSheet("font-size: 18px; font-weight: bold; color: white;")
+        blue_layout.addWidget(FL_MODS_label)
 
         blue_layout.setContentsMargins(10, 0, 10, 0)
         blue_layout.setSpacing(10)
@@ -296,7 +296,7 @@ class FLauncher(QMainWindow):
         text_browser.setText('''
             <div>
                 <span style="font-size: 16px; font-weight: normal; color: black;">
-                    Страницы модов пока что нет... появится когда я захочу, это будет через неизвестное время, так что ждите сто лет, у меня много других проектов, а я такой человек тот кто не доделывает проекты, мне больше интересна разработка искуственного интеллекта и создание новых проектов.<br>Просто ожидайте...<br>Сейчас максимум баги или обнову для онлайн сделаю когда он выйдет, ну и идея у меня есть создать сайт и контент-пак для достижений в игре и сколько времени вы провели в игре (не планирую создавать это просто идея, можете смело реализовать её в своих проектах), а на этом я прощаюсь, слишком много пишу, я всегда такой...<br><a href="https://discord.com/oauth2/authorize?client_id=1137405206288666634" style="color: blue; text-decoration: underline;">Оцените мой проект: Petya_Ai (искуственный интеллект, пока что тупой, но он с самообучением, умеет использовать кастомные эмодзи по смыслу, но не всегда. ещё умеет аудио отправлять и планирую возможность говорить в голосовом добавить. одноздачно повеселит.)</a><br>но запускаю я его не часто так как у меня нет видеокарты поддерживающей ИИ, а процессора для моего ИИ скоро будет не хватать так как он его уже грузит на 80% при генерации токенов.<br>Видеокарта: GTX550Ti<br>ЦП: Intel Core i7-3770k<br>ОЗУ: 8Gb
+                    Страницы модов пока что нет, появится когда я захочу, это будет через неизвестное время, так что ждите сто лет, у меня много других проектов, а я такой человек тот кто не доделывает проекты, мне больше интересна разработка искуственного интеллекта и создание новых проектов.<br>Просто ожидайте...<br>Сейчас максимум баги или обнову для онлайн сделаю когда он выйдет, ну и идея у меня есть создать сайт и контент-пак для достижений в игре и сколько времени вы провели в игре (не планирую создавать это просто идея, можете смело реализовать её в своих проектах), а на этом я прощаюсь, слишком много пишу, я всегда такой...<br><a href="https://discord.com/oauth2/authorize?client_id=1137405206288666634" style="color: blue; text-decoration: underline;">Оцените мой проект: Petya_Ai (искуственный интеллект, пока что тупой, но он с самообучением, умеет использовать кастомные эмодзи по смыслу, но не всегда. ещё умеет аудио отправлять и планирую возможность говорить в голосовом добавить. одноздачно повеселит.)</a><br><a href="http://f1.aurorix.net:38052" style="color: blue; text-decoration: underline;">FreshTube - копия (вообще не копия) ютуба</a><br>но запускаю я его не часто так как у меня нет видеокарты поддерживающей ИИ, а процессора для моего ИИ скоро будет не хватать так как он его уже грузит на 80% при генерации токенов.<br>Видеокарта: GTX550Ti<br>ЦП: Intel Core i7-3770k<br>ОЗУ: 8Gb
                 </span>
             </div>
         ''')
@@ -315,10 +315,11 @@ class FLauncher(QMainWindow):
 
         if selected_version != "Получение версий...":
             version_folder = self.app_data_path / selected_version
-            voxel_core_path = version_folder / "VoxelCore.exe"
 
-            if os.path.exists(voxel_core_path):
-                self.show_info_message("Информация", f"VoxelCore.exe уже существует в папке {version_folder}. Скачивание не требуется.")
+            exe_files = list(version_folder.glob("*.exe"))
+
+            if exe_files:
+                self.show_info_message("Информация", f"В папке {version_folder} уже есть .exe файлы. Скачивание не требуется.")
             else:
                 self.download_and_extract_version(selected_version)
         else:
@@ -329,11 +330,11 @@ class FLauncher(QMainWindow):
 
         if selected_version != "Получение версий...":
             version_folder = self.app_data_path / selected_version
-            voxel_core_path = version_folder / "VoxelCore.exe"
-            voxel_engine_path = version_folder / "VoxelEngine.exe"
 
-            if os.path.exists(voxel_core_path) or os.path.exists(voxel_engine_path):
-                exe_to_launch = voxel_core_path if os.path.exists(voxel_core_path) else voxel_engine_path
+            exe_files = [f for f in os.listdir(version_folder) if f.endswith(".exe") and f.lower() != "vctest.exe"]
+
+            if exe_files:
+                exe_to_launch = version_folder / exe_files[0]
                 self.launch_game(exe_to_launch, version_folder)
             else:
                 self.show_error_message("Ошибка", "Сначала скачайте выбранную версию.")
