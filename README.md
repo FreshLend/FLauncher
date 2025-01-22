@@ -3,12 +3,12 @@ FLauncher — Лаунчер для [Voxel Core](https://github.com/MihailRis/Vo
 Который старается быть похожим на TLauncher.
 
 Особенности:
-> Работа в оффлайн режиме
-> Discord Rich Presence
-> Похож на TLauncher
+- Работа в оффлайн режиме
+- Discord Rich Presence
+- Похож на TLauncher
 
 В планах:
-> Страница модов
-> Настройки
+- Страница модов
+- Настройки
 
 [Скачать](https://freshlend.github.io/home/apps/FLauncher)
