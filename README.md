@@ -13,4 +13,4 @@
 ## Установка библиотек
 > pip install -r requirements.txt
 
-[[Скачать TLauncher]](https://freshlend.github.io/home/apps/FLauncher)
+[[Скачать FLauncher]](https://freshlend.github.io/home/apps/FLauncher)
