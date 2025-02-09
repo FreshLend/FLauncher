@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
-import sys, os, subprocess, zipfile, shutil, requests, markdown, time, threading, asyncio
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QScrollArea, QLabel, QSpacerItem, QSizePolicy, QFrame, QPushButton, QComboBox, QMessageBox, QHBoxLayout, QProgressBar, QTextBrowser
+import sys, os, subprocess, zipfile, shutil, requests, markdown, time, threading, asyncio, toml, re
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QScrollArea, QLabel, QSpacerItem, QSizePolicy, QFrame, QPushButton, QComboBox, QMessageBox, QHBoxLayout, QProgressBar, QTextBrowser, QLineEdit
 from PyQt5.QtGui import QPalette, QBrush, QImage, QDesktopServices, QIcon
 from PyQt5.QtCore import Qt, QUrl, QSize, QCoreApplication
 from pathlib import Path
@@ -22,7 +22,9 @@ class FLauncher(QMainWindow):
 
         self.setGeometry(100, 100, 1100, 650)
         self.setFixedSize(1100, 650)
-        self.setWindowTitle('FLauncher (0.2.5)')
+        self.setWindowTitle('FLauncher 0.3.0')
+        icon_path = resource_path('ui/icon.ico')
+        self.setWindowIcon(QIcon(icon_path))
 
         self.client_id = "1143147014226444338"
         self.discord_presence = Presence(self.client_id)
@@ -38,6 +40,7 @@ class FLauncher(QMainWindow):
         self.add_blue_bar()
         self.create_app_data_directory()
         self.load_versions()
+        self.set_username_from_config()
 
     def connectToDiscord(self):
         try:
@@ -50,9 +53,10 @@ class FLauncher(QMainWindow):
     def setDiscordPresence(self):
         if self.discord_presence:
             details = "Просматривает главную страницу"
-            threading.Thread(target=self.updatePresenceAsync, args=(details,)).start()
+            state = "By FreshGame"
+            threading.Thread(target=self.updatePresenceAsync, args=(details, state)).start()
 
-    def updatePresenceAsync(self, details):
+    def updatePresenceAsync(self, details, state):
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -60,6 +64,7 @@ class FLauncher(QMainWindow):
             if self.discord_presence:
                 self.discord_presence.update(
                     details=details,
+                    state=state,
                     start=time.time(),
                     large_image="icon"
                 )
@@ -82,14 +87,16 @@ class FLauncher(QMainWindow):
         blue_bar.setStyleSheet("background-color: rgba(113, 169, 76, 0.9);")
 
         self.version_combo = QComboBox(blue_bar)
-        self.version_combo.setGeometry(10, 20, 200, 60)
+        self.version_combo.setGeometry(220, 20, 200, 60)
         self.version_combo.setStyleSheet("background-color: white; color: black; font-size: 18px; font-weight: bold;")
         self.version_combo.addItem("Получение версий...")
 
-        self.download_button = QPushButton("Скачать", blue_bar)
-        self.download_button.setGeometry(220, 20, 150, 30)
-        self.download_button.setStyleSheet("background-color: rgb(236, 193, 63); color: white; font-size: 18px; font-weight: bold;")
-        self.download_button.clicked.connect(self.on_download_button_click)
+        self.input_field = QLineEdit(blue_bar)
+        self.input_field.setGeometry(10, 20, 200, 60)
+        self.input_field.setStyleSheet("background-color: white; color: black; font-size: 18px; font-weight: bold;")
+        self.input_field.setPlaceholderText("Введите ник...")
+
+        self.input_field.textChanged.connect(self.on_text_changed)
 
         self.progress_bar = QProgressBar(blue_bar)
         self.progress_bar.setGeometry(10, 0, self.width() - 20, 20)
@@ -102,8 +109,8 @@ class FLauncher(QMainWindow):
         self.download_info_label.setStyleSheet("font-size: 12px; color: black;")
         self.download_info_label.setAlignment(Qt.AlignCenter)
 
-        self.play_button = QPushButton("Играть", blue_bar)
-        self.play_button.setGeometry(220, 50, 150, 30)
+        self.play_button = QPushButton("Войти в игру", blue_bar)
+        self.play_button.setGeometry(430, 20, 250, 60)
         self.play_button.setStyleSheet("background-color: rgb(236, 193, 63); color: white; font-size: 18px; font-weight: bold;")
         self.play_button.clicked.connect(self.on_play_button_click)
 
@@ -166,6 +173,7 @@ class FLauncher(QMainWindow):
             }
         """)
         self.settings_button.clicked.connect(self.open_settings)
+        self.version_combo.currentIndexChanged.connect(self.on_version_changed)
 
     def add_release_panel(self):
         release_panel = QWidget(self)
@@ -310,39 +318,67 @@ class FLauncher(QMainWindow):
         self.FL_MODS.hide()
         self.FL_MODS_background.hide()
 
-    def on_download_button_click(self):
-        selected_version = self.version_combo.currentText()
+    def on_text_changed(self):
+        input_text = self.input_field.text()
+        self.update_username_in_config(input_text)
 
-        if selected_version != "Получение версий...":
-            version_folder = self.app_data_path / selected_version
+    def on_version_changed(self):
+        self.set_username_from_config()
 
-            exe_files = list(version_folder.glob("*.exe"))
+    def set_username_from_config(self):
+        version = self.version_combo.currentText()
+        config_file_path = self.app_data_path / version / "config" / "multiplayer" / "config.toml"
+        if not config_file_path.exists():
+            return
+        try:
+            config = toml.load(config_file_path)
+            if "profiles" in config and "current" in config["profiles"]:
+                username = config["profiles"]["current"].get("username", "")
+                if username:
+                    self.input_field.setText(username)
+                else:
+                    self.input_field.setPlaceholderText("Введите ник...")
+        except Exception as e:
+            print(f"Ошибка при чтении файла config.toml: {e}")
+            self.input_field.setPlaceholderText("Введите ник...")
 
-            if exe_files:
-                self.show_info_message("Информация", f"В папке {version_folder} уже есть .exe файлы. Скачивание не требуется.")
-            else:
-                self.download_and_extract_version(selected_version)
-        else:
-            self.show_info_message("Выбор версии", "Пожалуйста, выберите версию для скачивания.")
+    def update_username_in_config(self, username):
+        version = self.version_combo.currentText()
+        config_file_path = self.app_data_path / version / "config" / "multiplayer" / "config.toml"
+        if not config_file_path.exists():
+            return
+        try:
+            config = toml.load(config_file_path)
+            if "profiles" in config and "current" in config["profiles"]:
+                config["profiles"]["current"]["username"] = username
+                with open(config_file_path, "w", encoding="utf-8") as config_file:
+                    toml.dump(config, config_file)
+        except Exception as e:
+            print(f"Ошибка при обновлении файла config.toml: {e}")
 
     def on_play_button_click(self):
-        selected_version = self.version_combo.currentText()
-
-        if selected_version != "Получение версий...":
-            version_folder = self.app_data_path / selected_version
-
-            exe_files = [f for f in os.listdir(version_folder) if f.endswith(".exe") and f.lower() != "vctest.exe"]
-
-            if exe_files:
-                exe_to_launch = version_folder / exe_files[0]
-                self.launch_game(exe_to_launch, version_folder)
+        try:
+            selected_version = self.version_combo.currentText()
+            if selected_version != "Получение версий...":
+                version_folder = self.app_data_path / selected_version
+                if not os.path.exists(version_folder):
+                    self.download_and_extract_version(selected_version)
+                    return
+                exe_files = [f for f in os.listdir(version_folder) if f.endswith(".exe") and f.lower() != "vctest.exe"]
+                if exe_files:
+                    exe_to_launch = version_folder / exe_files[0]
+                    self.launch_game(exe_to_launch, version_folder)
+                else:
+                    self.show_error_message("Ошибка", "Сначала скачайте выбранную версию.")
             else:
-                self.show_error_message("Ошибка", "Сначала скачайте выбранную версию.")
-        else:
-            self.show_info_message("Выбор версии", "Пожалуйста, выберите версию для игры.")
+                self.show_info_message("Выбор версии", "Пожалуйста, выберите версию для игры.")
+        except Exception as e:
+            print(f"Произошла ошибка: {e}")
+            self.show_error_message("Ошибка", "Произошла непредвиденная ошибка.")
 
     def refresh_versions(self):
         self.load_versions()
+        self.set_username_from_config()
 
     def on_flm_button_click(self):
         if self.FL_MODS.isVisible():
@@ -450,24 +486,40 @@ class FLauncher(QMainWindow):
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                 extraction_path = self.app_data_path / version_tag
                 extraction_path.mkdir(parents=True, exist_ok=True)
-                
                 zip_ref.extractall(extraction_path)
-                
                 zip_files = zip_ref.namelist()
-
                 folder_in_zip = zip_files[0].split('/')[0]
-
                 folder_to_move = extraction_path / folder_in_zip
-
                 if folder_to_move.exists():
                     for item in folder_to_move.iterdir():
                         shutil.move(str(item), extraction_path / item.name)
                     folder_to_move.rmdir()
-
             if os.path.exists(zip_path):
                 os.remove(zip_path)
+            self.create_config_toml(extraction_path)
         except Exception as e:
             self.show_error_message("Ошибка", f"Ошибка при распаковке архива: {e}")
+
+    def create_config_toml(self, extraction_path):
+        try:
+            config_path = extraction_path / 'config' / 'multiplayer' / 'config.toml'
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_content = """
+    config_version = 0
+
+    [profiles]
+    profiles = ["Player"]
+
+    [multiplayer]
+    servers = [[ ]]
+
+    [profiles.current]
+    username = "FLauncher_Player"
+    """
+            with open(config_path, 'w') as config_file:
+                config_file.write(config_content)
+        except Exception as e:
+            pass
 
     def create_app_data_directory(self):
         user_folder = Path(os.path.expanduser("~"))
@@ -554,13 +606,20 @@ class FLauncher(QMainWindow):
             for version in user_versions:
                 self.version_combo.addItem(version)
 
+    def version_to_tuple(self, version_str):
+        """Функция для преобразования версии в кортеж для сортировки"""
+        version_parts = re.findall(r'\d+', version_str)
+        return tuple(map(int, version_parts))
+
     def get_user_versions(self):
         user_versions = []
         if self.app_data_path.exists():
             for folder in self.app_data_path.iterdir():
                 if folder.is_dir():
-                    user_versions.append(folder.name)
-        return user_versions
+                    version_tuple = self.version_to_tuple(folder.name)
+                    user_versions.append((folder.name, version_tuple))
+        user_versions.sort(key=lambda x: x[1], reverse=True)
+        return [version[0] for version in user_versions]
 
     def get_github_releases(self, layout):
         url = "https://api.github.com/repos/MihailRis/VoxelEngine-Cpp/releases"
