@@ -231,47 +231,67 @@ class FLauncher(QMainWindow):
     def add_settings_panel(self):
         self.settings_background = QWidget(self)
         self.settings_background.setGeometry(0, 0, 1100, self.height())
+        self.settings_background.setStyleSheet("background-color: #f0f0f0;")
 
         self.settings_panel = QWidget(self)
-        self.settings_panel.setGeometry(200, 20, 700, self.height() - 130)
-        self.settings_panel.setStyleSheet("background-color: white;")
+        self.settings_panel.setGeometry(0, 0, 1100, self.height() - 90)
+        self.settings_panel.setStyleSheet("""
+            background-color: white;
+        """)
 
         self.blue_strip = QWidget(self.settings_panel)
-        self.blue_strip.setGeometry(0, 0, self.settings_panel.width(), 40)
-        self.blue_strip.setStyleSheet("background-color: #00aaff;")
+        self.blue_strip.setGeometry(0, 0, self.settings_panel.width(), 50)
+        self.blue_strip.setStyleSheet("background-color: #0086c7;")
 
         blue_layout = QHBoxLayout(self.blue_strip)
 
         settings_label = QLabel('Настройки', self.blue_strip)
         settings_label.setAlignment(Qt.AlignCenter)
-        settings_label.setStyleSheet("font-size: 18px; font-weight: bold; color: white;")
+        settings_label.setStyleSheet("""
+            font-size: 20px;
+            font-weight: bold;
+            color: white;
+        """)
         blue_layout.addWidget(settings_label)
 
-        blue_layout.setContentsMargins(10, 0, 10, 0)
+        blue_layout.setContentsMargins(20, 0, 20, 0)
         blue_layout.setSpacing(10)
-
         blue_layout.setStretch(1, 1)
 
         layout = QVBoxLayout(self.settings_panel)
 
-        text_browser = QTextBrowser(self.settings_panel)
-        text_browser.setAlignment(Qt.AlignTop)
-        text_browser.setText('''
-            <div>
-                <span style="font-size: 16px; font-weight: normal; color: black;">
-                    Настроек пока что нет, появится когда я захочу, это будет через неизвестное время, так что ждите сто лет, у меня много других проектов, а я такой человек тот кто не доделывает проекты, мне больше интересна разработка искуственного интеллекта и создание новых проектов.<br>Просто ожидайте...<br>Сейчас максимум баги или обнову для онлайн сделаю когда он выйдет, ну и идея у меня есть создать сайт и контент-пак для достижений в игре и сколько времени вы провели в игре (не планирую создавать это просто идея, можете смело реализовать её в своих проектах), а на этом я прощаюсь, слишком много пишу, я всегда такой...<br><a href="https://discord.com/oauth2/authorize?client_id=1137405206288666634" style="color: blue; text-decoration: underline;">Оцените мой проект: Petya_Ai (искуственный интеллект, пока что тупой, но он с самообучением, умеет использовать кастомные эмодзи по смыслу, но не всегда. ещё умеет аудио отправлять и планирую возможность говорить в голосовом добавить. одноздачно повеселит.)</a><br><a href="http://f1.aurorix.net:38052" style="color: blue; text-decoration: underline;">FreshTube - копия (вообще не копия) ютуба</a><br>но запускаю я его не часто так как у меня нет видеокарты поддерживающей ИИ, а процессора для моего ИИ скоро будет не хватать так как он его уже грузит на 80% при генерации токенов.<br>Видеокарта: GTX550Ti<br>ЦП: Intel Core i7-3770k<br>ОЗУ: 8Gb
-                </span>
-            </div>
-        ''')
-        text_browser.setOpenExternalLinks(True)
-
-        layout.addWidget(text_browser)
-
-        layout.setContentsMargins(10, 40, 10, 10)
+        layout.setContentsMargins(20, 60, 20, 20)
         layout.setSpacing(20)
+
+        self.run_bat_button = QPushButton('Собрать VoxelEngine', self.settings_panel)
+        self.run_bat_button.setStyleSheet("""
+            font-size: 16px;
+            background-color: #00aaff;
+            color: white;
+            border-radius: 5px;
+            padding: 10px;
+            border: none;
+            text-align: center;
+        """)
+        self.run_bat_button.setFixedWidth(200)
+        self.run_bat_button.setFixedHeight(40)
+        self.run_bat_button.clicked.connect(self.run_bat_file)
+
+        layout.addWidget(self.run_bat_button, alignment=Qt.AlignTop | Qt.AlignLeft)
+
+        spacer = QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        layout.addItem(spacer)
 
         self.settings_panel.hide()
         self.settings_background.hide()
+
+    def run_bat_file(self):
+        bat_file_path = resource_path('files/build.bat')
+        try:
+            self.show_info_message("Процесс остановлен", "Проверьте консоль после нажатия 'ОК'")
+            subprocess.run(bat_file_path, check=True)
+        except subprocess.CalledProcessError as e:
+            self.show_info_message("Ошибка", "Ошибка при запуске batch файла.")
 
     def add_FL_MODS(self):
         self.FL_MODS_background = QWidget(self)
@@ -423,7 +443,7 @@ class FLauncher(QMainWindow):
     def download_and_extract_version(self, version_tag):
         try:
             self.download_start_time = time.time()
-            api_url = f"https://api.github.com/repos/MihailRis/VoxelEngine-Cpp/releases/tags/{version_tag}"
+            api_url = f"https://api.github.com/repos/MihailRis/VoxelEngine-Cpp/releases/tags/{version_tag}?per_page=100000"
             
             response = requests.get(api_url)
             if response.status_code == 200:
@@ -504,18 +524,17 @@ class FLauncher(QMainWindow):
         try:
             config_path = extraction_path / 'config' / 'multiplayer' / 'config.toml'
             config_path.parent.mkdir(parents=True, exist_ok=True)
-            config_content = """
-    config_version = 0
+            config_content ="""config_version = 0
 
-    [profiles]
-    profiles = ["Player"]
+[multiplayer]
+servers = [[ "The VoxelOnline", "vo.theunboard.com:25565",],]
 
-    [multiplayer]
-    servers = [[ ]]
+[profiles]
+profiles = ["Player",]
 
-    [profiles.current]
-    username = "FLauncher_Player"
-    """
+[profiles.current]
+username = "FLauncher_Player"
+"""
             with open(config_path, 'w') as config_file:
                 config_file.write(config_content)
         except Exception as e:
@@ -525,12 +544,14 @@ class FLauncher(QMainWindow):
         user_folder = Path(os.path.expanduser("~"))
         self.app_data_path = user_folder / "AppData" / "Roaming" / "com.flauncher.app" / "FLauncher" / "VE" / "versions"
         self.downloads_path = user_folder / "AppData" / "Roaming" / "com.flauncher.app" / "FLauncher" / "VE" / "downloads"
+        self.build_path = user_folder / "AppData" / "Roaming" / "com.flauncher.app" / "FLauncher" / "VE" / "build"
         
         self.app_data_path.mkdir(parents=True, exist_ok=True)
         self.downloads_path.mkdir(parents=True, exist_ok=True)
+        self.build_path.mkdir(parents=True, exist_ok=True)
 
     def load_versions(self):
-        url = "https://api.github.com/repos/MihailRis/VoxelEngine-Cpp/releases"
+        url = "https://api.github.com/repos/MihailRis/VoxelEngine-Cpp/releases?per_page=100000"
         
         try:
             response = requests.get(url)
@@ -568,7 +589,7 @@ class FLauncher(QMainWindow):
 
     def fetch_versions(self):
         try:
-            response = requests.get("https://api.github.com/repos/MihailRis/VoxelEngine-Cpp/releases")
+            response = requests.get("https://api.github.com/repos/MihailRis/VoxelEngine-Cpp/releases?per_page=100000")
             if response.status_code == 200:
                 releases = response.json()
 
@@ -622,7 +643,7 @@ class FLauncher(QMainWindow):
         return [version[0] for version in user_versions]
 
     def get_github_releases(self, layout):
-        url = "https://api.github.com/repos/MihailRis/VoxelEngine-Cpp/releases"
+        url = "https://api.github.com/repos/MihailRis/VoxelEngine-Cpp/releases?per_page=15"
         
         try:
             response = requests.get(url)
@@ -632,7 +653,7 @@ class FLauncher(QMainWindow):
             count = 0
 
             for release in releases:
-                if count >= 30:
+                if count >= 15:
                     break
 
                 if isinstance(release, dict):
@@ -680,6 +701,12 @@ class FLauncher(QMainWindow):
                     layout.addItem(QSpacerItem(20, 10, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
                     count += 1
+
+            all_releases_label = QLabel(self)
+            all_releases_label.setText('Посмотреть весь список релизов: <a href="https://github.com/MihailRis/VoxelEngine-Cpp/releases">https://github.com/MihailRis/VoxelEngine-Cpp/releases</a>')
+            all_releases_label.setOpenExternalLinks(True)
+            all_releases_label.setStyleSheet("font-size: 16px; color: black; margin-top: 20px;")
+            layout.addWidget(all_releases_label)
 
         except requests.RequestException as e:
             error_label = QLabel("Не удалось загрузить релизы.", self)
