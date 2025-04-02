@@ -22,7 +22,7 @@ class FLauncher(QMainWindow):
 
         self.setGeometry(100, 100, 1100, 650)
         self.setFixedSize(1100, 650)
-        self.setWindowTitle('FLauncher 0.3.0')
+        self.setWindowTitle('FLauncher 0.3.1')
         icon_path = resource_path('ui/icon.ico')
         self.setWindowIcon(QIcon(icon_path))
 
