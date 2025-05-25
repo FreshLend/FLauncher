@@ -58,7 +58,7 @@ class FLauncher(QMainWindow):
 
         self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self.check_for_updates)
-        self.update_timer.start(3600000)  # Проверка обновлений лаунчера каждый час
+        self.update_timer.start(225000)  # Проверка обновлений лаунчера каждые 3.75 минуты
     
     def setup_ui(self):
         """Настройка основного интерфейса"""
