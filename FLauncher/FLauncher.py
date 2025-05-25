@@ -145,7 +145,7 @@ class FLauncher(QMainWindow):
         self.input_field.textChanged.connect(self.on_text_changed)
 
         self.version_combo = QComboBox(blue_bar)
-        self.version_combo.setGeometry(220, 20, 200, 60)
+        self.version_combo.setGeometry(220, 20, 300, 60)
         self.version_combo.setStyleSheet("""
             background-color: white; 
             color: black; 
@@ -179,7 +179,7 @@ class FLauncher(QMainWindow):
         self.download_info_label.setAlignment(Qt.AlignCenter)
 
         self.play_button = QPushButton("Войти в игру", blue_bar)
-        self.play_button.setGeometry(430, 20, 250, 60)
+        self.play_button.setGeometry(530, 20, 300, 60)
         self.play_button.setStyleSheet("""
             QPushButton {
                 background-color: rgb(236, 193, 63); 
