@@ -27,7 +27,7 @@ from PyQt5.QtGui import (
 )
 from PyQt5.QtCore import Qt, QUrl, QSize, QCoreApplication, QTimer
 
-version = "0.4.0"
+version = "v0.4.0"
 
 
 def resource_path(relative_path):
