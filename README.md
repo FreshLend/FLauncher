@@ -5,12 +5,12 @@
 Особенности:
 - Работа в оффлайн режиме
 - Discord Rich Presence
+- интеграция других репозиториев
 - Похож на TLauncher
 
 В планах:
 - Страница модов
-- Настройки
 ## Установка библиотек
 > pip install -r requirements.txt
 
-[[Скачать FLauncher]](https://freshlend.github.io/home/apps/FLauncher)
+[[Скачать FLauncher]](https://drive.google.com/file/d/1H9M1bupWB_pGmeGQVHFAFgWGAv-BRu-z/view)
