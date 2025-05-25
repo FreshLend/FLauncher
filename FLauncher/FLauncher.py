@@ -1032,57 +1032,65 @@ username = "FLauncher_Player"
     def load_versions(self):
         """Загрузка списка версий с GitHub"""
         self.version_combo.clear()
-        self.version_combo.addItem("Получение версий...")
-        QCoreApplication.processEvents()
 
-        all_versions = []
-        
-        main_repo_versions = self.get_github_repo_versions("MihailRis/VoxelEngine-Cpp")
-        all_versions.extend(main_repo_versions)
-        
-        for repo in self.settings.get("github_repos", []):
-            try:
-                repo_versions = self.get_github_repo_versions(repo)
-                all_versions.extend(repo_versions)
-            except Exception as e:
-                print(f"Ошибка при загрузке версий из репозитория {repo}: {e}")
-        
-        user_versions = self.get_user_versions()
-        
-        self.version_combo.clear()
-        added_versions = set()
+        user_versions = [v for v in self.get_user_versions()]
         
         for version in user_versions:
-            if version not in added_versions:
-                self.version_combo.addItem(version)
-                added_versions.add(version)
+            self.version_combo.addItem(version)
         
-        for version, _ in all_versions:
-            if version not in added_versions:
-                self.version_combo.addItem(version)
-                added_versions.add(version)
+        def load_online_versions():
+            try:
+                requests.head("https://github.com", timeout=3)
+                
+                all_versions = []
+                
+                main_versions = self.get_github_repo_versions("MihailRis/VoxelEngine-Cpp")
+                filtered = [v for v in main_versions 
+                        if not v[0].startswith(('v11', 'v12'))]
+                all_versions.extend(filtered)
+                
+                for repo in self.settings.get("github_repos", []):
+                    try:
+                        repo_versions = self.get_github_repo_versions(repo)
+                        filtered = [v for v in repo_versions 
+                                if not v[0].startswith(('v11', 'v12'))]
+                        all_versions.extend(filtered)
+                    except Exception as e:
+                        print(f"Ошибка загрузки {repo}: {e}")
+                
+                current_items = {self.version_combo.itemText(i) 
+                            for i in range(self.version_combo.count())}
+                new_versions = [v[0] for v in all_versions 
+                            if v[0] not in current_items]
+                
+                if new_versions:
+                    self.version_combo.addItems(new_versions)
+                    
+            except (requests.ConnectionError, requests.Timeout):
+                print("Нет подключения к интернету, показываем только локальные версии")
+            except Exception as e:
+                print(f"Ошибка загрузки версий: {e}")
         
-        if user_versions or all_versions:
+        threading.Thread(target=load_online_versions, daemon=True).start()
+        
+        if self.version_combo.count() > 0:
             self.version_combo.setCurrentIndex(0)
-        else:
-            self.version_combo.addItem("Версии не найдены")
 
     def get_github_repo_versions(self, repo):
-        """Получение версий из GitHub репозитория"""
-        url = f"https://api.github.com/repos/{repo}/releases?per_page=1000"
-        response = requests.get(url)
-        if response.status_code == 200:
-            releases = response.json()
-            
-            filtered_releases = [
-                (release['tag_name'], repo) 
-                for release in releases 
+        """Получение версий из GitHub"""
+        try:
+            response = requests.get(
+                f"https://api.github.com/repos/{repo}/releases?per_page=1000",
+                timeout=5,
+                headers={'Accept': 'application/vnd.github.v3+json'}
+            )
+            return [
+                (release['tag_name'], repo)
+                for release in response.json()
                 if isinstance(release, dict) and 'tag_name' in release
             ]
-            
-            return filtered_releases
-        else:
-            print(f"Ошибка при загрузке версий из {repo}: {response.status_code}")
+        except Exception as e:
+            print(f"Ошибка получения версий из {repo}: {e}")
             return []
 
     def check_for_updates(self):
@@ -1328,7 +1336,6 @@ username = "FLauncher_Player"
         if self.discord_presence:
             self.discord_presence.close()
         event.accept()
-
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
