@@ -1,5 +1,4 @@
 Markdown
-toml
 pypresence
 PyQt5
 PyQt5_sip
