@@ -18,16 +18,15 @@ from datetime import datetime
 from pypresence import Presence
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QScrollArea, QLabel,
-    QSpacerItem, QSizePolicy, QFrame, QPushButton, QComboBox, QMessageBox,
-    QHBoxLayout, QProgressBar, QTextBrowser, QLineEdit, QInputDialog,
-    QCheckBox, QSpinBox
+    QSizePolicy, QFrame, QPushButton, QComboBox, QMessageBox,
+    QHBoxLayout, QProgressBar, QTextBrowser, QLineEdit, QInputDialog
 )
 from PyQt5.QtGui import (
-    QPalette, QBrush, QImage, QDesktopServices, QIcon, QFont
+    QPalette, QBrush, QImage, QDesktopServices, QIcon
 )
 from PyQt5.QtCore import Qt, QUrl, QSize, QCoreApplication, QTimer
 
-version = "v0.4.0"
+version = "v0.4.1"
 
 
 def resource_path(relative_path):
@@ -46,22 +45,20 @@ class FLauncher(QMainWindow):
         self.load_settings()
 
         self.setup_ui()
-        
-        # Discord RPC
+
         self.discord_presence = None
         self.client_id = "1143147014226444338"
         self.connect_to_discord()
-        self.set_discord_presence("Просматривает главную страницу", f"@{self.input_field.text()}" if self.input_field.text() else "Гость")
+        self.set_discord_presence("Просматривает главную страницу", f"@{self.input_field.text()}" if self.input_field.text() else "Гость", small_image="home")
         
         self.load_versions()
         self.set_username_from_config()
 
         self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self.check_for_updates)
-        self.update_timer.start(225000)  # Проверка обновлений лаунчера каждые 3.75 минуты
+        self.update_timer.start(300000)
     
     def setup_ui(self):
-        """Настройка основного интерфейса"""
         self.setGeometry(100, 100, 1100, 650)
         self.setFixedSize(1100, 650)
         self.setWindowTitle(f'FLauncher {version}')
@@ -78,7 +75,6 @@ class FLauncher(QMainWindow):
         self.add_blue_bar()
 
     def connect_to_discord(self):
-        """Подключение к Discord RPC"""
         try:
             if self.settings.get("discord_rpc_enabled", True):
                 self.discord_presence = Presence(self.client_id)
@@ -87,19 +83,19 @@ class FLauncher(QMainWindow):
             print(f"Ошибка при подключении к Discord: {e}")
             self.discord_presence = None
 
-    def set_discord_presence(self, details, state):
-        """Установка статуса Discord"""
+    def set_discord_presence(self, details, state, small_image=None):
         if self.discord_presence:
             username = self.input_field.text()
             display_state = f"@{username}" if username else "Гость"
+            self.current_small_image = small_image
+            
             threading.Thread(
                 target=self.update_presence_async,
-                args=(details, display_state),
+                args=(details, display_state, small_image),
                 daemon=True
             ).start()
 
-    def update_presence_async(self, details, state):
-        """обновление статуса Discord"""
+    def update_presence_async(self, details, state, small_image=None):
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -110,13 +106,13 @@ class FLauncher(QMainWindow):
                     state=state,
                     start=time.time(),
                     large_image="icon",
+                    small_image=small_image,
                     large_text="FLauncher"
                 )
         except Exception as e:
             print(f"Ошибка при обновлении статуса Discord: {e}")
 
     def set_background(self):
-        """фоновое изображение"""
         self.setAutoFillBackground(True)
         palette = self.palette()
         image = QImage(resource_path('ui/background.png'))
@@ -125,12 +121,10 @@ class FLauncher(QMainWindow):
         self.setPalette(palette)
 
     def add_blue_bar(self):
-        """нижняя панель управления"""
         blue_bar = QWidget(self)
         blue_bar.setGeometry(0, self.height() - 90, self.width(), 90)
         blue_bar.setStyleSheet("background-color: rgba(113, 169, 76, 0.9);")
 
-        # Поле ввода ника
         self.input_field = QLineEdit(blue_bar)
         self.input_field.setGeometry(10, 20, 200, 60)
         self.input_field.setStyleSheet("""
@@ -274,7 +268,6 @@ class FLauncher(QMainWindow):
         self.settings_button.clicked.connect(self.open_settings)
 
     def add_release_panel(self):
-        """панель с релизами"""
         self.release_panel = QWidget(self)
         self.release_panel.setGeometry(20, 40, 700, self.height() - 130)
         self.release_panel.setStyleSheet("""
@@ -316,7 +309,6 @@ class FLauncher(QMainWindow):
         self.get_github_releases()
 
     def add_info_panel(self):
-        """информационная панель"""
         info_panel = QWidget(self)
         info_panel.setGeometry(830, 0, 250, self.height() - 90)
         info_panel.setStyleSheet("""
@@ -389,7 +381,6 @@ class FLauncher(QMainWindow):
         info_layout.addStretch(1)
 
     def add_settings_panel(self):
-        """панель настроек"""
         self.settings_background = QWidget(self)
         self.settings_background.setGeometry(0, 0, 1100, self.height())
         self.settings_background.setStyleSheet("background-color: rgba(240, 240, 240, 0.95);")
@@ -552,14 +543,12 @@ class FLauncher(QMainWindow):
         self.settings_background.hide()
 
     def update_launch_params(self):
-        """Обновляет параметры запуска в настройках"""
         self.settings["launch_params"] = {
             "additional_args": self.additional_args_input.text()
         }
         self.save_settings()
 
     def toggle_discord_rpc(self):
-        """Переключение Discord RPC"""
         if self.discord_presence:
             self.discord_presence.close()
             self.discord_presence = None
@@ -580,7 +569,6 @@ class FLauncher(QMainWindow):
         self.save_settings()
 
     def add_fl_mods_panel(self):
-        """панель модов"""
         self.FL_MODS_background = QWidget(self)
         self.FL_MODS_background.setGeometry(0, 0, 1100, self.height())
         self.FL_MODS_background.setStyleSheet("background-color: rgba(240, 240, 240, 0.95);")
@@ -642,58 +630,57 @@ class FLauncher(QMainWindow):
         self.FL_MODS_background.hide()
 
     def on_text_changed(self):
-        """Обработка изменения текста в поле ввода ника"""
         input_text = self.input_field.text()
         self.update_username_in_config(input_text)
 
     def on_version_changed(self):
-        """Обработка изменения выбранной версии"""
         self.set_username_from_config()
 
     def set_username_from_config(self):
-        """Установка ника"""
         version = self.version_combo.currentText()
         if version == "Получение версий...":
             return
             
-        config_file_path = self.app_data_path / version / "config" / "multiplayer" / "config.toml"
+        config_file_path = self.app_data_path / version / "config" / "quartz" / "config.json"
         if not config_file_path.exists():
             self.input_field.setPlaceholderText("Введите ник...")
             return
             
         try:
-            config = toml.load(config_file_path)
-            if "profiles" in config and "current" in config["profiles"]:
-                username = config["profiles"]["current"].get("username", "")
-                if username:
-                    self.input_field.setText(username)
-                else:
-                    self.input_field.setPlaceholderText("Введите ник...")
+            with open(config_file_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                if "Account" in config and "name" in config["Account"]:
+                    username = config["Account"]["name"]
+                    if username:
+                        self.input_field.setText(username)
+                    else:
+                        self.input_field.setPlaceholderText("Введите ник...")
         except Exception as e:
-            print(f"Ошибка при чтении файла config.toml: {e}")
+            print(f"Ошибка при чтении файла config.json: {e}")
             self.input_field.setPlaceholderText("Введите ник...")
 
     def update_username_in_config(self, username):
-        """Обновление ника"""
         version = self.version_combo.currentText()
         if version == "Получение версий...":
             return
             
-        config_file_path = self.app_data_path / version / "config" / "multiplayer" / "config.toml"
+        config_file_path = self.app_data_path / version / "config" / "quartz" / "config.json"
         if not config_file_path.exists():
             return
             
         try:
-            config = toml.load(config_file_path)
-            if "profiles" in config and "current" in config["profiles"]:
-                config["profiles"]["current"]["username"] = username
-                with open(config_file_path, "w", encoding="utf-8") as config_file:
-                    toml.dump(config, config_file)
+            with open(config_file_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            
+            if "Account" in config:
+                config["Account"]["name"] = username
+                
+            with open(config_file_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=4)
         except Exception as e:
-            print(f"Ошибка при обновлении файла config.toml: {e}")
+            print(f"Ошибка при обновлении файла config.json: {e}")
 
     def on_play_button_click(self):
-        """Обработка кнопки 'Войти в игру'"""
         selected_version = self.version_combo.currentText()
         if selected_version == "Получение версий...":
             self.show_info_message("Выбор версии", "Пожалуйста, выберите версию для игры.")
@@ -728,40 +715,51 @@ class FLauncher(QMainWindow):
             )
 
     def refresh_versions(self):
-        """Обновление списка версий"""
         self.version_combo.clear()
         self.version_combo.addItem("Получение версий...")
         self.load_versions()
 
     def on_flm_button_click(self):
-        """Обработка кнопки FLMODS"""
         if self.FL_MODS.isVisible():
             self.FL_MODS.hide()
             self.FL_MODS_background.hide()
-            self.set_discord_presence("Просматривает главную страницу", "By FreshGame")
+            self.set_discord_presence(
+                "Просматривает главную страницу",
+                "By FreshGame",
+                small_image="home"
+            )
         else:
             self.FL_MODS.show()
             self.FL_MODS_background.show()
-            self.set_discord_presence("Просматривает FLMODS", "By FreshGame")
+            self.set_discord_presence(
+                "Просматривает FLMODS",
+                "By FreshGame",
+                small_image="mods"
+            )
 
     def open_versions_folder(self):
-        """Открытие папки с версиями"""
         url = QUrl.fromLocalFile(str(self.app_data_path))
         QDesktopServices.openUrl(url)
 
     def open_settings(self):
-        """Открытие панели настроек"""
         if self.settings_panel.isVisible():
             self.settings_panel.hide()
             self.settings_background.hide()
-            self.set_discord_presence("Просматривает главную страницу", "By FreshGame")
+            self.set_discord_presence(
+                "Просматривает главную страницу",
+                "By FreshGame",
+                small_image="home"
+            )
         else:
             self.settings_panel.show()
             self.settings_background.show()
-            self.set_discord_presence("В настройках", "By FreshGame")
+            self.set_discord_presence(
+                "В настройках",
+                "By FreshGame",
+                small_image="settings"
+            )
 
     def show_error_message(self, title, message):
-        """сообщение об ошибке"""
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Critical)
         msg.setWindowTitle(title)
@@ -777,7 +775,6 @@ class FLauncher(QMainWindow):
         msg.exec_()
 
     def show_info_message(self, title, message):
-        """информационное сообщение"""
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Information)
         msg.setWindowTitle(title)
@@ -793,13 +790,13 @@ class FLauncher(QMainWindow):
         msg.exec_()
 
     def launch_game(self, voxel_core_path, working_directory):
-        """Запуск игры"""
         try:
             username = self.input_field.text()
             display_name = f"@{username}" if username else "Гость"
             self.set_discord_presence(
                 f"Играет в {self.version_combo.currentText()}",
-                display_name
+                display_name,
+                small_image="game"
             )
             
             launch_params = [str(voxel_core_path)]
@@ -819,11 +816,11 @@ class FLauncher(QMainWindow):
             
             self.set_discord_presence(
                 "Просматривает главную страницу",
-                f"@{self.input_field.text()}" if self.input_field.text() else "Гость"
+                f"@{self.input_field.text()}" if self.input_field.text() else "Гость",
+                small_image="home"
             )
 
     def download_and_extract_version(self, version_tag):
-        """Скачивание и распаковка версии"""
         self.download_start_time = time.time()
         
         repo = self.find_repo_for_version(version_tag)
@@ -907,7 +904,6 @@ class FLauncher(QMainWindow):
             return False
 
     def _download_file(self, file_url, zip_path):
-        """Скачивание файла"""
         response = requests.get(file_url, stream=True)
         
         if response.status_code == 200:
@@ -943,7 +939,6 @@ class FLauncher(QMainWindow):
             raise Exception(f"Не удалось скачать файл. Код ошибки: {response.status_code}")
 
     def extract_zip(self, zip_path, version_tag):
-        """Распаковка ZIP архива"""
         try:
             extraction_path = self.app_data_path / version_tag
             extraction_path.mkdir(parents=True, exist_ok=True)
@@ -967,34 +962,29 @@ class FLauncher(QMainWindow):
             if zip_path.exists():
                 zip_path.unlink()
             
-            self.create_config_toml(extraction_path)
+            self.create_config_json(extraction_path)
             
         except Exception as e:
             raise Exception(f"Ошибка при распаковке архива: {e}")
 
-    def create_config_toml(self, extraction_path):
+    def create_config_json(self, extraction_path):
         try:
-            config_path = extraction_path / 'config' / 'multiplayer' / 'config.toml'
+            config_path = extraction_path / 'config' / 'quartz' / 'config.json'
             config_path.parent.mkdir(parents=True, exist_ok=True)
-            config_content = """config_version = 0
-
-[multiplayer]
-servers = []
-
-[profiles]
-profiles = ["Player"]
-
-[profiles.current]
-username = "FLauncher_Player"
-"""
+            config_content = {
+                "Account": {
+                    "friends": {},
+                    "name": "FLauncher_Player"
+                },
+                "Servers": {}
+            }
             if not config_path.exists():
                 with open(config_path, 'w', encoding='utf-8') as config_file:
-                    config_file.write(config_content)
+                    json.dump(config_content, config_file, indent=4)
         except Exception as e:
-            print(f"Не удалось создать config.toml: {e}")
+            print(f"Не удалось создать config.json: {e}")
 
     def create_app_data_directory(self):
-        """Создание необходимых директорий"""
         user_folder = Path(os.path.expanduser("~"))
         self.app_data_path = user_folder / "AppData" / "Roaming" / "com.flauncher.app" / "FLauncher" / "VE" / "versions"
         self.downloads_path = user_folder / "AppData" / "Roaming" / "com.flauncher.app" / "FLauncher" / "VE" / "downloads"
@@ -1014,7 +1004,6 @@ username = "FLauncher_Player"
                 }, f, indent=4)
 
     def load_settings(self):
-        """Загрузка настроек из файла"""
         try:
             with open(self.settings_path, 'r') as f:
                 self.settings = json.load(f)
@@ -1025,12 +1014,10 @@ username = "FLauncher_Player"
             }
 
     def save_settings(self):
-        """Сохранение настроек в файл"""
         with open(self.settings_path, 'w') as f:
             json.dump(self.settings, f)
 
     def load_versions(self):
-        """Загрузка списка версий с GitHub"""
         self.version_combo.clear()
 
         user_versions = [v for v in self.get_user_versions()]
@@ -1077,7 +1064,6 @@ username = "FLauncher_Player"
             self.version_combo.setCurrentIndex(0)
 
     def get_github_repo_versions(self, repo):
-        """Получение версий из GitHub"""
         try:
             response = requests.get(
                 f"https://api.github.com/repos/{repo}/releases?per_page=1000",
@@ -1094,7 +1080,6 @@ username = "FLauncher_Player"
             return []
 
     def check_for_updates(self):
-        """Проверка обновлений лаунчера"""
         try:
             response = requests.get(
                 "https://api.github.com/repos/FreshLend/FLauncher/releases/latest"
@@ -1120,7 +1105,7 @@ username = "FLauncher_Player"
         
         except Exception as e:
             print(f"Ошибка при проверке обновлений: {e}")
-            self.show_error_message("Ошибка", "Не удалось проверить обновления")
+            pass
 
     def find_download_link(self, markdown_text):
         import re
@@ -1132,7 +1117,6 @@ username = "FLauncher_Player"
         return tuple(map(int, version_parts))
 
     def get_user_versions(self):
-        """Получение списка установленных версий"""
         user_versions = []
         if self.app_data_path.exists():
             for folder in self.app_data_path.iterdir():
@@ -1144,7 +1128,6 @@ username = "FLauncher_Player"
         return [version[0] for version in user_versions]
     
     def load_github_repositories(self):
-        """Загрузка списка GitHub репозиториев"""
         for i in reversed(range(self.repos_layout.count())): 
             self.repos_layout.itemAt(i).widget().setParent(None)
         
@@ -1152,7 +1135,6 @@ username = "FLauncher_Player"
             self.add_repository_to_list(repo)
 
     def add_repository_to_list(self, repo):
-        """Добавление репозитория в список"""
         repo_widget = QWidget()
         repo_widget.setStyleSheet("background-color: #f5f5f5; border-radius: 5px;")
         
@@ -1186,7 +1168,6 @@ username = "FLauncher_Player"
         self.repos_layout.addWidget(repo_widget)
 
     def add_github_repository(self):
-        """Добавление нового GitHub репозитория"""
         repo, ok = QInputDialog.getText(
             self, 
             'Добавить репозиторий', 
@@ -1205,7 +1186,6 @@ username = "FLauncher_Player"
                 self.load_versions()
 
     def remove_github_repository(self, repo):
-        """Удаление GitHub репозитория"""
         if repo in self.settings["github_repos"]:
             self.settings["github_repos"].remove(repo)
             self.save_settings()
@@ -1213,7 +1193,6 @@ username = "FLauncher_Player"
             self.load_versions()
 
     def get_github_releases(self):
-        """Получение списка релизов с GitHub"""
         url = "https://api.github.com/repos/MihailRis/VoxelEngine-Cpp/releases"
         
         try:
