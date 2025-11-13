@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import sys
 import os
 import subprocess
@@ -10,7 +8,6 @@ import markdown
 import time
 import threading
 import asyncio
-import toml
 import re
 import json
 from pathlib import Path
@@ -18,15 +15,17 @@ from datetime import datetime
 from pypresence import Presence
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QScrollArea, QLabel,
-    QSizePolicy, QFrame, QPushButton, QComboBox, QMessageBox,
+    QSizePolicy, QFrame, QPushButton, QComboBox, QMessageBox, QTabWidget,
     QHBoxLayout, QProgressBar, QTextBrowser, QLineEdit, QInputDialog
 )
 from PyQt5.QtGui import (
     QPalette, QBrush, QImage, QDesktopServices, QIcon
 )
-from PyQt5.QtCore import Qt, QUrl, QSize, QCoreApplication, QTimer
+from PyQt5.QtCore import Qt, QUrl, QSize, QCoreApplication
 
-version = "v0.4.1"
+VERSION = "v0.4.1"
+MAIN_REPO = "MihailRis/voxelcore"
+MAX_LOAD = 1000
 
 
 def resource_path(relative_path):
@@ -53,15 +52,11 @@ class FLauncher(QMainWindow):
         
         self.load_versions()
         self.set_username_from_config()
-
-        self.update_timer = QTimer(self)
-        self.update_timer.timeout.connect(self.check_for_updates)
-        self.update_timer.start(300000)
     
     def setup_ui(self):
         self.setGeometry(100, 100, 1100, 650)
         self.setFixedSize(1100, 650)
-        self.setWindowTitle(f'FLauncher {version}')
+        self.setWindowTitle(f'FLauncher {VERSION}')
     
         icon_path = resource_path('ui/icon.ico')
         self.setWindowIcon(QIcon(icon_path))
@@ -369,7 +364,7 @@ class FLauncher(QMainWindow):
         button_freshlend.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://freshlend.github.io")))
         info_layout.addWidget(button_freshlend)
 
-        version_label = QLabel(f'Версия: {version}', info_panel)
+        version_label = QLabel(f'Версия: {VERSION}', info_panel)
         version_label.setAlignment(Qt.AlignCenter)
         version_label.setStyleSheet("""
             font-size: 14px; 
@@ -406,141 +401,272 @@ class FLauncher(QMainWindow):
         """)
         blue_layout.addWidget(settings_label)
 
-        layout = QVBoxLayout(self.settings_panel)
-        layout.setContentsMargins(30, 60, 30, 30)
-        layout.setSpacing(20)
-
-        discord_group = QWidget()
-        discord_layout = QVBoxLayout(discord_group)
-        
-        discord_label = QLabel('Discord RPC', discord_group)
-        discord_label.setStyleSheet("font-size: 18px; font-weight: bold;")
-        discord_layout.addWidget(discord_label)
-
-        discord_description = QLabel(
-            'Отображает информацию о вашей активности в Discord.<br>Вы можете отключить эту функцию, если она вам не нужна.',
-            discord_group
-        )
-        discord_description.setStyleSheet("font-size: 14px; color: #555;")
-        discord_description.setWordWrap(True)
-        discord_layout.addWidget(discord_description)
-
-        self.discord_toggle = QPushButton(
-            'Отключить Discord RPC' if self.settings.get("discord_rpc_enabled", True) 
-            else 'Включить Discord RPC', 
-            discord_group
-        )
-        self.discord_toggle.setStyleSheet("""
-            QPushButton {
-                font-size: 16px;
-                background-color: #7289da;
-                color: white;
-                border-radius: 5px;
-                padding: 10px;
-                border: none;
-                text-align: center;
-                min-width: 200px;
-                max-width: 200px;
+        self.tab_widget = QTabWidget(self.settings_panel)
+        self.tab_widget.setStyleSheet("""
+            QTabWidget::pane {
+                border: 1px solid #C2C7CB;
+                background-color: white;
+                margin-top: -1px;
             }
-            QPushButton:hover {
-                background-color: #8299ea;
+            QTabBar::tab {
+                background-color: #F0F0F0;
+                border: 1px solid #C4C4C3;
+                border-bottom: none;
+                padding: 8px 16px;
+                margin-right: 1px;
+                font-size: 14px;
+                min-width: 180px;
             }
-            QPushButton:pressed {
-                background-color: #6279ca;
+            QTabBar::tab:selected {
+                background-color: white;
+                border-color: #C2C7CB;
+            }
+            QTabBar::tab:!selected {
+                background-color: #E8E8E8;
+            }
+            QTabBar::tab:hover {
+                background-color: #F8F8F8;
             }
         """)
-        if not self.settings.get("discord_rpc_enabled", True):
-            self.discord_toggle.setStyleSheet(self.discord_toggle.styleSheet().replace(
-                "#7289da", "#4caf50"
-            ))
-        self.discord_toggle.setFixedHeight(40)
-        self.discord_toggle.clicked.connect(self.toggle_discord_rpc)
-        discord_layout.addWidget(self.discord_toggle, alignment=Qt.AlignLeft)
 
-        layout.addWidget(discord_group)
+        layout = QVBoxLayout(self.settings_panel)
+        layout.setContentsMargins(0, 50, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self.tab_widget)
+
+        launch_tab = QWidget()
+        launch_layout = QVBoxLayout(launch_tab)
+        launch_layout.setContentsMargins(30, 20, 30, 20)
+        launch_layout.setSpacing(25)
+
+        launch_params_group = QWidget()
+        launch_params_layout = QVBoxLayout(launch_params_group)
+        launch_params_layout.setContentsMargins(0, 0, 0, 0)
+        launch_params_layout.setSpacing(10)
+        
+        launch_params_label = QLabel('Параметры запуска')
+        launch_params_label.setStyleSheet("""
+            font-size: 16px; 
+            font-weight: bold;
+            color: #333;
+            padding-bottom: 5px;
+        """)
+        launch_params_layout.addWidget(launch_params_label)
+
+        params_description = QLabel(
+            'Дополнительные аргументы для запуска VoxelCore.'
+        )
+        params_description.setStyleSheet("""
+            font-size: 13px;
+            color: #666;
+            padding-bottom: 8px;
+        """)
+        params_description.setWordWrap(True)
+        launch_params_layout.addWidget(params_description)
+
+        self.additional_args_input = QLineEdit()
+        self.additional_args_input.setText(self.settings["launch_params"]["additional_args"])
+        self.additional_args_input.textChanged.connect(self.update_launch_params)
+        self.additional_args_input.setStyleSheet("""
+            QLineEdit {
+                border: 1px solid #CCC;
+                padding: 8px 12px;
+                font-size: 14px;
+                background-color: white;
+            }
+            QLineEdit:focus {
+                border: 1px solid #0086c7;
+            }
+        """)
+        self.additional_args_input.setPlaceholderText("Аргументы:")
+        launch_params_layout.addWidget(self.additional_args_input)
+
+        launch_layout.addWidget(launch_params_group)
+        launch_layout.addStretch(1)
+
+        flauncher_tab = QWidget()
+        flauncher_layout = QVBoxLayout(flauncher_tab)
+        flauncher_layout.setContentsMargins(30, 20, 30, 20)
+        flauncher_layout.setSpacing(25)
 
         github_group = QWidget()
         github_layout = QVBoxLayout(github_group)
+        github_layout.setContentsMargins(0, 0, 0, 0)
+        github_layout.setSpacing(12)
         
-        github_label = QLabel('GitHub Репозитории', github_group)
-        github_label.setStyleSheet("font-size: 18px; font-weight: bold;")
+        github_label = QLabel('GitHub Репозитории')
+        github_label.setStyleSheet("""
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+            padding-bottom: 5px;
+        """)
         github_layout.addWidget(github_label)
 
         github_description = QLabel(
-            'Добавьте другие GitHub репозитории для загрузки версий.<br>Формат: owner/repo (например: MihailRis/VoxelEngine-Cpp)',
-            github_group
+            'Добавьте другие GitHub репозитории для загрузки версий.\nФормат: owner/repo (например: MihailRis/voxelcore)'
         )
-        github_description.setStyleSheet("font-size: 14px; color: #555;")
+        github_description.setStyleSheet("""
+            font-size: 13px;
+            color: #666;
+            padding-bottom: 8px;
+        """)
         github_description.setWordWrap(True)
         github_layout.addWidget(github_description)
 
-        add_repo_button = QPushButton('Добавить репозиторий', github_group)
+        add_repo_button = QPushButton('Добавить репозиторий')
         add_repo_button.setStyleSheet("""
             QPushButton {
-                font-size: 16px;
-                background-color: #7289da;
+                font-size: 14px;
+                background-color: #4CAF50;
                 color: white;
-                border-radius: 5px;
-                padding: 10px;
+                padding: 8px 16px;
                 border: none;
                 text-align: center;
-                min-width: 200px;
-                max-width: 200px;
+                min-width: 160px;
+                max-width: 160px;
             }
             QPushButton:hover {
-                background-color: #8299ea;
+                background-color: #45a049;
             }
             QPushButton:pressed {
-                background-color: #6279ca;
+                background-color: #3d8b40;
             }
         """)
-        add_repo_button.setFixedHeight(40)
+        add_repo_button.setFixedHeight(35)
         add_repo_button.clicked.connect(self.add_github_repository)
         github_layout.addWidget(add_repo_button, alignment=Qt.AlignLeft)
 
-        self.repos_scroll = QScrollArea(github_group)
+        repos_label = QLabel('Добавленные репозитории:')
+        repos_label.setStyleSheet("font-size: 14px; color: #333; font-weight: bold;")
+        github_layout.addWidget(repos_label)
+
+        self.repos_scroll = QScrollArea()
         self.repos_scroll.setWidgetResizable(True)
+        self.repos_scroll.setFixedHeight(200)
         self.repos_scroll.setStyleSheet("""
             QScrollArea {
-                border: 1px solid #ccc;
-                border-radius: 5px;
+                border: 1px solid #DDD;
                 background-color: white;
+            }
+            QScrollBar:vertical {
+                border: none;
+                background-color: #F0F0F0;
+                width: 12px;
+                margin: 0px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: #C0C0C0;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: #A0A0A0;
             }
         """)
         
         self.repos_container = QWidget()
         self.repos_layout = QVBoxLayout(self.repos_container)
         self.repos_layout.setContentsMargins(5, 5, 5, 5)
-        self.repos_layout.setSpacing(5)
+        self.repos_layout.setSpacing(3)
         
         self.repos_scroll.setWidget(self.repos_container)
         github_layout.addWidget(self.repos_scroll)
 
         self.load_github_repositories()
 
-        layout.addWidget(github_group)
-        layout.addStretch(1)
+        flauncher_layout.addWidget(github_group)
+        flauncher_layout.addStretch(1)
 
-        launch_params_group = QWidget()
-        launch_params_layout = QVBoxLayout(launch_params_group)
+        privacy_tab = QWidget()
+        privacy_layout = QVBoxLayout(privacy_tab)
+        privacy_layout.setContentsMargins(30, 20, 30, 20)
+        privacy_layout.setSpacing(25)
+
+        discord_group = QWidget()
+        discord_layout = QVBoxLayout(discord_group)
+        discord_layout.setContentsMargins(0, 0, 0, 0)
+        discord_layout.setSpacing(12)
         
-        launch_params_label = QLabel('Параметры запуска', launch_params_group)
-        launch_params_label.setStyleSheet("font-size: 18px; font-weight: bold;")
-        launch_params_layout.addWidget(launch_params_label)
+        discord_label = QLabel('Discord RPC')
+        discord_label.setStyleSheet("""
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+            padding-bottom: 5px;
+        """)
+        discord_layout.addWidget(discord_label)
 
-        args_label = QLabel('', launch_params_group)
-        launch_params_layout.addWidget(args_label)
+        discord_description = QLabel(
+            'Отображает информацию о вашей активности в Discord.\nВы можете отключить эту функцию, если она вам не нужна.'
+        )
+        discord_description.setStyleSheet("""
+            font-size: 13px;
+            color: #666;
+            padding-bottom: 8px;
+        """)
+        discord_description.setWordWrap(True)
+        discord_layout.addWidget(discord_description)
 
-        self.additional_args_input = QLineEdit(launch_params_group)
-        self.additional_args_input.setText(self.settings["launch_params"]["additional_args"])
-        self.additional_args_input.textChanged.connect(self.update_launch_params)
-        launch_params_layout.addWidget(self.additional_args_input)
+        self.discord_toggle = QPushButton(
+            'Отключить Discord RPC' if self.settings.get("discord_rpc_enabled", True) 
+            else 'Включить Discord RPC'
+        )
+        self.update_discord_button_style()
+        self.discord_toggle.setFixedHeight(35)
+        self.discord_toggle.clicked.connect(self.toggle_discord_rpc)
+        discord_layout.addWidget(self.discord_toggle, alignment=Qt.AlignLeft)
 
-        layout.addWidget(launch_params_group)
-        layout.addStretch(1)
+        privacy_layout.addWidget(discord_group)
+        privacy_layout.addStretch(1)
+
+        self.tab_widget.addTab(launch_tab, "Запуск VoxelCore")
+        self.tab_widget.addTab(flauncher_tab, "Настройки FLauncher")
+        self.tab_widget.addTab(privacy_tab, "Конфиденциальность")
 
         self.settings_panel.hide()
         self.settings_background.hide()
+
+    def update_discord_button_style(self):
+        if self.settings.get("discord_rpc_enabled", True):
+            self.discord_toggle.setText('Отключить Discord RPC')
+            self.discord_toggle.setStyleSheet("""
+                QPushButton {
+                    font-size: 14px;
+                    background-color: #f44336;
+                    color: white;
+                    padding: 8px 16px;
+                    border: none;
+                    text-align: center;
+                    min-width: 160px;
+                    max-width: 160px;
+                }
+                QPushButton:hover {
+                    background-color: #da3930;
+                }
+                QPushButton:pressed {
+                    background-color: #c1372f;
+                }
+            """)
+        else:
+            self.discord_toggle.setText('Включить Discord RPC')
+            self.discord_toggle.setStyleSheet("""
+                QPushButton {
+                    font-size: 14px;
+                    background-color: #4CAF50;
+                    color: white;
+                    padding: 8px 16px;
+                    border: none;
+                    text-align: center;
+                    min-width: 160px;
+                    max-width: 160px;
+                }
+                QPushButton:hover {
+                    background-color: #45a049;
+                }
+                QPushButton:pressed {
+                    background-color: #3d8b40;
+                }
+            """)
 
     def update_launch_params(self):
         self.settings["launch_params"] = {
@@ -725,7 +851,7 @@ class FLauncher(QMainWindow):
             self.FL_MODS_background.hide()
             self.set_discord_presence(
                 "Просматривает главную страницу",
-                "By FreshGame",
+                f"@{self.input_field.text()}" if self.input_field.text() else "Гость",
                 small_image="home"
             )
         else:
@@ -733,7 +859,7 @@ class FLauncher(QMainWindow):
             self.FL_MODS_background.show()
             self.set_discord_presence(
                 "Просматривает FLMODS",
-                "By FreshGame",
+                f"@{self.input_field.text()}" if self.input_field.text() else "Гость",
                 small_image="mods"
             )
 
@@ -747,7 +873,7 @@ class FLauncher(QMainWindow):
             self.settings_background.hide()
             self.set_discord_presence(
                 "Просматривает главную страницу",
-                "By FreshGame",
+                f"@{self.input_field.text()}" if self.input_field.text() else "Гость",
                 small_image="home"
             )
         else:
@@ -755,7 +881,7 @@ class FLauncher(QMainWindow):
             self.settings_background.show()
             self.set_discord_presence(
                 "В настройках",
-                "By FreshGame",
+                f"@{self.input_field.text()}" if self.input_field.text() else "Гость",
                 small_image="settings"
             )
 
@@ -885,7 +1011,7 @@ class FLauncher(QMainWindow):
             self.download_info_label.setText("")
 
     def find_repo_for_version(self, version_tag):
-        main_repo = "MihailRis/VoxelEngine-Cpp"
+        main_repo = MAIN_REPO
         if self.is_version_in_repo(version_tag, main_repo):
             return main_repo
         
@@ -1031,7 +1157,7 @@ class FLauncher(QMainWindow):
                 
                 all_versions = []
                 
-                main_versions = self.get_github_repo_versions("MihailRis/VoxelEngine-Cpp")
+                main_versions = self.get_github_repo_versions(MAIN_REPO)
                 filtered = [v for v in main_versions 
                         if not v[0].startswith(('v11', 'v12'))]
                 all_versions.extend(filtered)
@@ -1066,7 +1192,7 @@ class FLauncher(QMainWindow):
     def get_github_repo_versions(self, repo):
         try:
             response = requests.get(
-                f"https://api.github.com/repos/{repo}/releases?per_page=1000",
+                f"https://api.github.com/repos/{repo}/releases?per_page={MAX_LOAD}",
                 timeout=5,
                 headers={'Accept': 'application/vnd.github.v3+json'}
             )
@@ -1078,39 +1204,6 @@ class FLauncher(QMainWindow):
         except Exception as e:
             print(f"Ошибка получения версий из {repo}: {e}")
             return []
-
-    def check_for_updates(self):
-        try:
-            response = requests.get(
-                "https://api.github.com/repos/FreshLend/FLauncher/releases/latest"
-            )
-            if response.status_code == 200:
-                latest_release = response.json()
-                latest_version = latest_release['tag_name']
-                
-                if latest_version != version:
-                    download_url = self.find_download_link(latest_release['body'])
-                    
-                    if download_url:
-                        reply = QMessageBox.question(
-                            self, 'Доступно обновление',
-                            f'Доступна новая версия лаунчера {latest_version}. Хотите скачать её сейчас?',
-                            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes
-                        )
-                        
-                        if reply == QMessageBox.Yes:
-                            QDesktopServices.openUrl(QUrl(download_url))
-                    else:
-                        QDesktopServices.openUrl(QUrl(latest_release['html_url']))
-        
-        except Exception as e:
-            print(f"Ошибка при проверке обновлений: {e}")
-            pass
-
-    def find_download_link(self, markdown_text):
-        import re
-        match = re.search(r'\[Скачать\]\((https?://[^\s]+)\)', markdown_text)
-        return match.group(1) if match else None
 
     def version_to_tuple(self, version_str):
         version_parts = re.findall(r'\d+', version_str)
@@ -1171,7 +1264,7 @@ class FLauncher(QMainWindow):
         repo, ok = QInputDialog.getText(
             self, 
             'Добавить репозиторий', 
-            'Введите owner/repo (например: MihailRis/VoxelEngine-Cpp):'
+            'Введите owner/repo (например: MihailRis/voxelcore):'
         )
         
         if ok and repo:
@@ -1193,7 +1286,7 @@ class FLauncher(QMainWindow):
             self.load_versions()
 
     def get_github_releases(self):
-        url = "https://api.github.com/repos/MihailRis/VoxelEngine-Cpp/releases"
+        url = f"https://api.github.com/repos/{MAIN_REPO}/releases"
         
         try:
             response = requests.get(url)
@@ -1276,11 +1369,11 @@ class FLauncher(QMainWindow):
                     self.release_layout.addWidget(release_widget)
 
             all_releases_label = QLabel()
-            all_releases_label.setText('''
+            all_releases_label.setText(f'''
                 <div style="margin-top: 20px;">
                     Посмотреть весь список релизов: 
-                    <a href="https://github.com/MihailRis/VoxelEngine-Cpp/releases">
-                        https://github.com/MihailRis/VoxelEngine-Cpp/releases
+                    <a href="https://github.com/{MAIN_REPO}/releases">
+                        https://github.com/{MAIN_REPO}/releases
                     </a>
                 </div>
             ''')
