@@ -1,5 +1,5 @@
 # FLauncher
-Лаунчер для [Voxel Core](https://github.com/MihailRis/VoxelEngine-Cpp), написанный на Python.
+Лаунчер для [VoxelCore](https://github.com/MihailRis/VoxelEngine-Cpp), написанный на Python.
 Который старается быть похожим на TLauncher.
 
 Особенности:
