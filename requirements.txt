@@ -1,0 +1,4 @@
+markdown
+pypresence
+PyQt5
+requests
