@@ -17,7 +17,7 @@
 > pip install -r requirements.txt
 
 ## Сборка в EXE
-> pip install pyinstaller
+> pip install pyinstaller  
 > pyinstaller build.spec
 
 [[Скачать FLauncher]](https://drive.google.com/file/d/1H9M1bupWB_pGmeGQVHFAFgWGAv-BRu-z/view)
