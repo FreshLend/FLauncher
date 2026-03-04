@@ -37,34 +37,46 @@ jobs:
         run: pyinstaller build.spec
         shell: pwsh
       
-      - name: Get version from build.spec
+      - name: Get version from build.spec (Windows)
         id: get_version
-        shell: bash
+        shell: pwsh
         run: |
-          VERSION=$(grep -o "VERSION = ['\"]*[^'\"]*['\"]*" build.spec | grep -o "['\"][^'\"]*['\"]" | tr -d "'\"")
-          if [ -z "$VERSION" ]; then
-            if [[ "${{ github.event_name }}" == "release" ]]; then
-              VERSION="${{ github.event.release.tag_name }}"
-            else
-              VERSION="${{ github.event.inputs.version }}"
-            fi
-          fi
-          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Detected version: ${VERSION}"
+          $content = Get-Content -Path build.spec -Raw
+          $pattern = 'VERSION\s*=\s*[''"]([^''"]+)[''"]'
+          $match = [regex]::Match($content, $pattern)
+          
+          if ($match.Success) {
+            $VERSION = $match.Groups[1].Value
+            Write-Host "Found version in build.spec: $VERSION"
+          } else {
+            Write-Host "Version not found in build.spec, using event version"
+            if ("${{ github.event_name }}" -eq "release") {
+              $VERSION = "${{ github.event.release.tag_name }}"
+            } else {
+              $VERSION = "${{ github.event.inputs.version }}"
+            }
+          }
+          
+          Write-Host "VERSION=$VERSION"
+          echo "VERSION=$VERSION" >> $env:GITHUB_OUTPUT
       
       - name: List dist folder
-        run: ls -la dist/
-        shell: bash
+        run: |
+          Write-Host "Files in dist folder:"
+          Get-ChildItem -Path dist -Name
+        shell: pwsh
       
       - name: Rename Windows executable
         run: |
-          $file = Get-ChildItem -Path dist -Filter "FLauncher-*.exe" | Select-Object -First 1
-          if ($file) {
+          $files = Get-ChildItem -Path dist -Filter "FLauncher-*.exe"
+          if ($files.Count -gt 0) {
+            $file = $files[0]
             $newname = "FLauncher-${{ steps.get_version.outputs.VERSION }}-win64.exe"
             Move-Item -Path $file.FullName -Destination "dist/$newname" -Force
             Write-Host "Renamed to: $newname"
+            Write-Host "Final file: $(Get-ChildItem -Path dist -Filter $newname | Select-Object Name, Length)"
           } else {
-            Write-Host "No matching file found in dist folder"
+            Write-Host "Error: No FLauncher-*.exe files found in dist folder"
             Get-ChildItem -Path dist
             exit 1
           }
