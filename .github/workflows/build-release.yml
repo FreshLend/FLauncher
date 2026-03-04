@@ -22,7 +22,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.10'
           architecture: 'x64'
       
       - name: Install dependencies
@@ -39,11 +39,6 @@ jobs:
       
       - name: Build with PyInstaller
         run: pyinstaller build.spec
-      
-      - name: Show compression stats
-        run: |
-          Write-Host "Final executable size:"
-          Get-Item dist/FLauncher.exe | Select-Object Name, @{Name="Size(MB)";Expression={[math]::Round($_.Length/1MB, 2)}}
       
       - name: Get version
         id: get_version
