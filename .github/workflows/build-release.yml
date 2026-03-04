@@ -24,13 +24,11 @@ jobs:
           python-version: '3.10'
           architecture: 'x64'
       
-      - name: Install dependencies
+      - name: Install deps
         run: |
           pip install pyinstaller
           if (Test-Path requirements.txt) { pip install -r requirements.txt; }
-      
-      - name: Install UPX
-        run: choco install upx -y
+          choco install upx -y
       
       - name: Build
         run: pyinstaller build.spec
@@ -43,12 +41,7 @@ jobs:
           $content = Get-Content -Path build.spec -Raw
           $pattern = 'VERSION\s*=\s*[''"]([^''"]+)[''"]'
           $match = [regex]::Match($content, $pattern)
-          
-          if ($match.Success) {
-            $VERSION = $match.Groups[1].Value
-          } else {
-            $VERSION = "${{ github.event.inputs.version }}"
-          }
+          $VERSION = if ($match.Success) { $match.Groups[1].Value } else { "${{ github.event.inputs.version }}" }
           echo "VERSION=$VERSION" >> $env:GITHUB_OUTPUT
       
       - name: Rename
@@ -73,7 +66,7 @@ jobs:
         if: github.event_name != 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: FLauncher-${{ steps.version.outputs.VERSION }}-win64.exe
+          name: FLauncher-${{ steps.version.outputs.VERSION }}-win64
           path: dist/FLauncher-${{ steps.version.outputs.VERSION }}-win64.exe
 
   build-linux:
@@ -88,13 +81,10 @@ jobs:
         with:
           python-version: '3.10'
       
-      - name: Install system dependencies
+      - name: Install deps
         run: |
           sudo apt-get update
           sudo apt-get install -y libfuse2 upx
-      
-      - name: Install dependencies
-        run: |
           pip install pyinstaller
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       
@@ -105,26 +95,17 @@ jobs:
         id: version
         run: |
           VERSION=$(grep -o "VERSION = ['\"]*[^'\"]*['\"]*" build.spec | grep -o "['\"][^'\"]*['\"]" | tr -d "'\"")
-          if [ -z "$VERSION" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-          fi
-          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "VERSION=${VERSION:-${{ github.event.inputs.version }}}" >> $GITHUB_OUTPUT
       
       - name: Prepare binary
         run: |
-          echo "Files in dist:"
-          ls -la dist/
           BINARY=$(find dist -name "FLauncher-*" -type f | head -1)
-          if [ -z "$BINARY" ]; then
-            echo "Error: No FLauncher binary found"
-            exit 1
-          fi
           cp "$BINARY" dist/flauncher
           chmod +x dist/flauncher
       
       - name: Create AppImage
         run: |
-          wget -q "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
           
           mkdir -p AppDir/usr/bin
@@ -139,9 +120,7 @@ jobs:
           Categories=Game;
           EOF
           
-          if [ -f src/ui/icon.png ]; then
-            cp src/ui/icon.png AppDir/flauncher.png
-          fi
+          [ -f src/ui/icon.png ] && cp src/ui/icon.png AppDir/flauncher.png
           
           cat > AppDir/AppRun <<EOF
           #!/bin/bash
@@ -168,7 +147,7 @@ jobs:
         if: github.event_name != 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: FLauncher-${{ steps.version.outputs.VERSION }}-x86_64.AppImage
+          name: FLauncher-${{ steps.version.outputs.VERSION }}-x86_64
           path: FLauncher-${{ steps.version.outputs.VERSION }}-x86_64.AppImage
 
   build-macos:
@@ -183,13 +162,11 @@ jobs:
         with:
           python-version: '3.10'
       
-      - name: Install dependencies
+      - name: Install deps
         run: |
           pip install pyinstaller
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-      
-      - name: Install UPX
-        run: brew install upx
+          brew install upx
       
       - name: Build
         run: pyinstaller build.spec
@@ -197,11 +174,8 @@ jobs:
       - name: Get version
         id: version
         run: |
-          if [[ "${{ github.event_name }}" == "release" ]]; then
-            VERSION="${{ github.event.release.tag_name }}"
-          else
-            VERSION="${{ github.event.inputs.version }}"
-          fi
+          VERSION="${{ github.event.inputs.version }}"
+          [ "${{ github.event_name }}" == "release" ] && VERSION="${{ github.event.release.tag_name }}"
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
       
       - name: Create DMG
@@ -230,5 +204,5 @@ jobs:
         if: github.event_name != 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: FLauncher-${{ steps.version.outputs.VERSION }}-macos.dmg
+          name: FLauncher-${{ steps.version.outputs.VERSION }}-macos
           path: FLauncher-${{ steps.version.outputs.VERSION }}-macos.dmg
