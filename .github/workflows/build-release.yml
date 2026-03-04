@@ -107,18 +107,34 @@ jobs:
           fi
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
       
+      - name: Find and prepare binary
+        run: |
+          echo "Files in dist:"
+          ls -la dist/
+          
+          BINARY=$(find dist -name "FLauncher-*" -type f | head -1)
+          
+          if [ -z "$BINARY" ]; then
+            echo "Error: No FLauncher binary found in dist/"
+            exit 1
+          fi
+          
+          echo "Found binary: $BINARY"
+          cp "$BINARY" dist/flauncher
+          chmod +x dist/flauncher
+      
       - name: Create AppImage
         run: |
           wget -q "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
           chmod +x appimagetool-x86_64.AppImage
           
           mkdir -p AppDir/usr/bin
-          cp dist/FLauncher-${{ steps.version.outputs.VERSION }} AppDir/usr/bin/flauncher
-          chmod +x AppDir/usr/bin/flauncher
+          cp dist/flauncher AppDir/usr/bin/flauncher
           
           cat > AppDir/flauncher.desktop <<EOF
           [Desktop Entry]
           Name=FLauncher
+          Comment=VoxelCore Launcher
           Exec=flauncher
           Icon=flauncher
           Type=Application
@@ -129,8 +145,18 @@ jobs:
             cp src/ui/icon.png AppDir/flauncher.png
           fi
           
+          cat > AppDir/AppRun <<EOF
+          HERE="\$(dirname "\$(readlink -f "\$0")")"
+          exec "\$HERE/usr/bin/flauncher" "\$@"
+          EOF
+          chmod +x AppDir/AppRun
+          
           ARCH=x86_64 ./appimagetool-x86_64.AppImage AppDir
-          mv FLauncher-*.AppImage FLauncher-${{ steps.version.outputs.VERSION }}-x86_64.AppImage
+          
+          mv FLauncher-*.AppImage FLauncher-${{ steps.version.outputs.VERSION }}-x86_64.AppImage || true
+          
+          echo "AppImage created:"
+          ls -la FLauncher-*.AppImage
       
       - name: Upload to Release
         if: github.event_name == 'release'
