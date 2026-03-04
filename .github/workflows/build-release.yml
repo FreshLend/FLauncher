@@ -47,7 +47,7 @@ jobs:
       - name: Rename
         run: |
           $file = Get-ChildItem -Path dist -Filter "FLauncher-*.exe" | Select-Object -First 1
-          $newname = "FLauncher-${{ steps.version.outputs.VERSION }}-win64.exe"
+          $newname = "FLauncher-${{ steps.version.outputs.VERSION }}_win64.exe"
           Move-Item -Path $file.FullName -Destination "dist/$newname" -Force
         shell: pwsh
       
@@ -58,16 +58,16 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: dist/FLauncher-${{ steps.version.outputs.VERSION }}-win64.exe
-          asset_name: FLauncher-${{ steps.version.outputs.VERSION }}-win64.exe
+          asset_path: dist/FLauncher-${{ steps.version.outputs.VERSION }}_win64.exe
+          asset_name: FLauncher-${{ steps.version.outputs.VERSION }}_win64.exe
           asset_content_type: application/vnd.microsoft.portable-executable
       
       - name: Upload artifact
         if: github.event_name != 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: FLauncher-${{ steps.version.outputs.VERSION }}-win64
-          path: dist/FLauncher-${{ steps.version.outputs.VERSION }}-win64.exe
+          name: FLauncher-${{ steps.version.outputs.VERSION }}_win64
+          path: dist/FLauncher-${{ steps.version.outputs.VERSION }}_win64.exe
 
   build-linux:
     name: Linux Build
@@ -130,7 +130,7 @@ jobs:
           chmod +x AppDir/AppRun
           
           ARCH=x86_64 ./appimagetool-x86_64.AppImage AppDir
-          mv FLauncher-*.AppImage FLauncher-${{ steps.version.outputs.VERSION }}-x86_64.AppImage
+          mv FLauncher-*.AppImage FLauncher-${{ steps.version.outputs.VERSION }}_x86-64.AppImage
       
       - name: Upload to Release
         if: github.event_name == 'release'
@@ -139,16 +139,16 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: FLauncher-${{ steps.version.outputs.VERSION }}-x86_64.AppImage
-          asset_name: FLauncher-${{ steps.version.outputs.VERSION }}-x86_64.AppImage
+          asset_path: FLauncher-${{ steps.version.outputs.VERSION }}_x86-64.AppImage
+          asset_name: FLauncher-${{ steps.version.outputs.VERSION }}_x86-64.AppImage
           asset_content_type: application/x-iso9660-appimage
       
       - name: Upload artifact
         if: github.event_name != 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: FLauncher-${{ steps.version.outputs.VERSION }}-x86_64
-          path: FLauncher-${{ steps.version.outputs.VERSION }}-x86_64.AppImage
+          name: FLauncher-${{ steps.version.outputs.VERSION }}_x86-64
+          path: FLauncher-${{ steps.version.outputs.VERSION }}_x86-64.AppImage
 
   build-macos:
     name: macOS Build
@@ -187,7 +187,7 @@ jobs:
           hdiutil create -volname "FLauncher ${{ steps.version.outputs.VERSION }}" \
             -srcfolder dmg_temp \
             -ov -format UDZO \
-            "FLauncher-${{ steps.version.outputs.VERSION }}-macos.dmg"
+            "FLauncher-${{ steps.version.outputs.VERSION }}_macos.dmg"
       
       - name: Upload to Release
         if: github.event_name == 'release'
@@ -196,13 +196,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: FLauncher-${{ steps.version.outputs.VERSION }}-macos.dmg
-          asset_name: FLauncher-${{ steps.version.outputs.VERSION }}-macos.dmg
+          asset_path: FLauncher-${{ steps.version.outputs.VERSION }}_macos.dmg
+          asset_name: FLauncher-${{ steps.version.outputs.VERSION }}_macos.dmg
           asset_content_type: application/x-apple-diskimage
       
       - name: Upload artifact
         if: github.event_name != 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: FLauncher-${{ steps.version.outputs.VERSION }}-macos
-          path: FLauncher-${{ steps.version.outputs.VERSION }}-macos.dmg
+          name: FLauncher-${{ steps.version.outputs.VERSION }}_macos
+          path: FLauncher-${{ steps.version.outputs.VERSION }}_macos.dmg
