@@ -12,7 +12,7 @@ on:
 
 jobs:
   build-windows:
-    name: Windows
+    name: Windows Build
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -28,6 +28,9 @@ jobs:
         run: |
           pip install pyinstaller
           if (Test-Path requirements.txt) { pip install -r requirements.txt; }
+      
+      - name: Install UPX
+        run: choco install upx -y
       
       - name: Build
         run: pyinstaller build.spec
@@ -70,11 +73,11 @@ jobs:
         if: github.event_name != 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: FLauncher-${{ steps.version.outputs.VERSION }}-win64
+          name: FLauncher-${{ steps.version.outputs.VERSION }}-win64.exe
           path: dist/FLauncher-${{ steps.version.outputs.VERSION }}-win64.exe
 
   build-linux:
-    name: Linux
+    name: Linux Build
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -88,7 +91,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libfuse2
+          sudo apt-get install -y libfuse2 upx
       
       - name: Install dependencies
         run: |
@@ -107,19 +110,15 @@ jobs:
           fi
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
       
-      - name: Find and prepare binary
+      - name: Prepare binary
         run: |
           echo "Files in dist:"
           ls -la dist/
-          
           BINARY=$(find dist -name "FLauncher-*" -type f | head -1)
-          
           if [ -z "$BINARY" ]; then
-            echo "Error: No FLauncher binary found in dist/"
+            echo "Error: No FLauncher binary found"
             exit 1
           fi
-          
-          echo "Found binary: $BINARY"
           cp "$BINARY" dist/flauncher
           chmod +x dist/flauncher
       
@@ -134,7 +133,6 @@ jobs:
           cat > AppDir/flauncher.desktop <<EOF
           [Desktop Entry]
           Name=FLauncher
-          Comment=VoxelCore Launcher
           Exec=flauncher
           Icon=flauncher
           Type=Application
@@ -146,17 +144,14 @@ jobs:
           fi
           
           cat > AppDir/AppRun <<EOF
+          #!/bin/bash
           HERE="\$(dirname "\$(readlink -f "\$0")")"
           exec "\$HERE/usr/bin/flauncher" "\$@"
           EOF
           chmod +x AppDir/AppRun
           
           ARCH=x86_64 ./appimagetool-x86_64.AppImage AppDir
-          
-          mv FLauncher-*.AppImage FLauncher-${{ steps.version.outputs.VERSION }}-x86_64.AppImage || true
-          
-          echo "AppImage created:"
-          ls -la FLauncher-*.AppImage
+          mv FLauncher-*.AppImage FLauncher-${{ steps.version.outputs.VERSION }}-x86_64.AppImage
       
       - name: Upload to Release
         if: github.event_name == 'release'
@@ -173,11 +168,11 @@ jobs:
         if: github.event_name != 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: FLauncher-${{ steps.version.outputs.VERSION }}-linux
+          name: FLauncher-${{ steps.version.outputs.VERSION }}-x86_64.AppImage
           path: FLauncher-${{ steps.version.outputs.VERSION }}-x86_64.AppImage
 
   build-macos:
-    name: macOS
+    name: macOS Build
     runs-on: macos-latest
     steps:
       - name: Checkout
@@ -192,6 +187,9 @@ jobs:
         run: |
           pip install pyinstaller
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      
+      - name: Install UPX
+        run: brew install upx
       
       - name: Build
         run: pyinstaller build.spec
@@ -232,5 +230,5 @@ jobs:
         if: github.event_name != 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: FLauncher-${{ steps.version.outputs.VERSION }}-macos
+          name: FLauncher-${{ steps.version.outputs.VERSION }}-macos.dmg
           path: FLauncher-${{ steps.version.outputs.VERSION }}-macos.dmg
