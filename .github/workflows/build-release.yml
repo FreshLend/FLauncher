@@ -1,4 +1,4 @@
-name: Build and Release FLauncher
+name: Build and Release
 
 on:
   release:
@@ -12,9 +12,8 @@ on:
 
 jobs:
   build-windows:
-    name: Build Windows executable
+    name: Windows Build
     runs-on: windows-latest
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -34,9 +33,6 @@ jobs:
       - name: Install UPX
         run: choco install upx -y
       
-      - name: Verify UPX
-        run: upx --version
-      
       - name: Build with PyInstaller
         run: pyinstaller build.spec
       
@@ -51,24 +47,182 @@ jobs:
           fi
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
       
-      - name: Rename executable
-        run: |
-          Move-Item dist/FLauncher.exe "dist/FLauncher-${{ steps.get_version.outputs.VERSION }}-win64.exe"
-      
-      - name: Upload to Release
+      - name: Upload to Release (Windows)
         if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: dist/FLauncher-${{ steps.get_version.outputs.VERSION }}-win64.exe
+          asset_path: dist/FLauncher-${{ steps.get_version.outputs.VERSION }}.exe
           asset_name: FLauncher-${{ steps.get_version.outputs.VERSION }}-win64.exe
           asset_content_type: application/vnd.microsoft.portable-executable
       
-      - name: Upload artifact
+      - name: Upload artifact (Windows)
         if: github.event_name != 'release'
         uses: actions/upload-artifact@v4
         with:
           name: FLauncher-${{ steps.get_version.outputs.VERSION }}-win64
-          path: dist/FLauncher-${{ steps.get_version.outputs.VERSION }}-win64.exe
+          path: dist/FLauncher-${{ steps.get_version.outputs.VERSION }}.exe
+
+  build-linux:
+    name: Linux Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1-mesa libxcb-xinerama0 libxcb-icccm4 \
+            libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+            libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xkb1 libxkbcommon-x11-0 \
+            libgl1-mesa-glx libgl1-mesa-dri
+      
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pyinstaller
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      
+      - name: Install UPX
+        run: sudo apt-get install -y upx
+      
+      - name: Build with PyInstaller
+        run: pyinstaller build.spec
+      
+      - name: Get version
+        id: get_version
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+      
+      - name: Create AppImage
+        run: |
+          wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage
+          
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          
+          cp dist/FLauncher-${{ steps.get_version.outputs.VERSION }} AppDir/usr/bin/flauncher
+          
+          cat > AppDir/usr/share/applications/flauncher.desktop << EOF
+          [Desktop Entry]
+          Name=FLauncher
+          Comment=VoxelCore Launcher
+          Exec=flauncher
+          Icon=flauncher
+          Terminal=false
+          Type=Application
+          Categories=Game;
+          EOF
+          
+          cp src/ui/icon.png AppDir/usr/share/icons/hicolor/256x256/apps/flauncher.png 2>/dev/null || true
+          
+          ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
+          
+          mv FLauncher-*.AppImage "FLauncher-${{ steps.get_version.outputs.VERSION }}-x86_64.AppImage" 2>/dev/null || true
+      
+      - name: Upload to Release (Linux)
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: FLauncher-${{ steps.get_version.outputs.VERSION }}-x86_64.AppImage
+          asset_name: FLauncher-${{ steps.get_version.outputs.VERSION }}-x86_64.AppImage
+          asset_content_type: application/x-iso9660-appimage
+      
+      - name: Upload artifact (Linux)
+        if: github.event_name != 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLauncher-${{ steps.get_version.outputs.VERSION }}-linux
+          path: FLauncher-${{ steps.get_version.outputs.VERSION }}-x86_64.AppImage
+
+  build-macos:
+    name: macOS Build
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pyinstaller
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      
+      - name: Install UPX
+        run: brew install upx
+      
+      - name: Build with PyInstaller
+        run: pyinstaller build.spec
+      
+      - name: Get version
+        id: get_version
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+      
+      - name: Create DMG
+        run: |
+          brew install create-dmg
+          
+          mkdir -p dmg_temp
+          
+          cp -r "dist/FLauncher-${{ steps.get_version.outputs.VERSION }}.app" dmg_temp/
+          
+          ln -s /Applications dmg_temp/Applications
+          
+          create-dmg \
+            --volname "FLauncher ${{ steps.get_version.outputs.VERSION }}" \
+            --volicon "src/ui/icon.icns" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "FLauncher-${{ steps.get_version.outputs.VERSION }}.app" 200 190 \
+            --hide-extension "FLauncher-${{ steps.get_version.outputs.VERSION }}.app" \
+            --app-drop-link 600 185 \
+            "FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg" \
+            "dmg_temp/"
+      
+      - name: Upload to Release (macOS)
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg
+          asset_name: FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg
+          asset_content_type: application/x-apple-diskimage
+      
+      - name: Upload artifact (macOS)
+        if: github.event_name != 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLauncher-${{ steps.get_version.outputs.VERSION }}-macos
+          path: FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg
