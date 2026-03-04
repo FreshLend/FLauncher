@@ -8,7 +8,7 @@ on:
       version:
         description: 'Версия для сборки'
         required: true
-        default: 'v0.1.0'
+        default: 'v0.0.0'
 
 jobs:
   build-windows:
@@ -22,7 +22,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.9'
           architecture: 'x64'
       
       - name: Install dependencies
@@ -31,9 +31,19 @@ jobs:
           pip install pyinstaller
           if (Test-Path requirements.txt) { pip install -r requirements.txt }
       
+      - name: Install UPX
+        run: choco install upx -y
+      
+      - name: Verify UPX
+        run: upx --version
+      
       - name: Build with PyInstaller
+        run: pyinstaller build.spec
+      
+      - name: Show compression stats
         run: |
-          pyinstaller build.spec
+          Write-Host "Final executable size:"
+          Get-Item dist/FLauncher.exe | Select-Object Name, @{Name="Size(MB)";Expression={[math]::Round($_.Length/1MB, 2)}}
       
       - name: Get version
         id: get_version
@@ -45,24 +55,10 @@ jobs:
             VERSION="${{ github.event.inputs.version }}"
           fi
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "RELEASE_NAME=FLauncher-${VERSION}-win64" >> $GITHUB_OUTPUT
       
       - name: Rename executable
         run: |
-          if (Test-Path dist/FLauncher.exe) {
-            Move-Item -Path dist/FLauncher.exe -Destination "dist/FLauncher-${{ steps.get_version.outputs.VERSION }}-win64.exe" -Force
-          } else {
-            Write-Host "Error: FLauncher.exe not found in dist folder"
-            exit 1
-          }
-      
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: FLauncher-${{ steps.get_version.outputs.VERSION }}-win64
-          path: dist/FLauncher-${{ steps.get_version.outputs.VERSION }}-win64.exe
-          retention-days: 30
+          Move-Item dist/FLauncher.exe "dist/FLauncher-${{ steps.get_version.outputs.VERSION }}-win64.exe"
       
       - name: Upload to Release
         if: github.event_name == 'release'
@@ -74,3 +70,10 @@ jobs:
           asset_path: dist/FLauncher-${{ steps.get_version.outputs.VERSION }}-win64.exe
           asset_name: FLauncher-${{ steps.get_version.outputs.VERSION }}-win64.exe
           asset_content_type: application/vnd.microsoft.portable-executable
+      
+      - name: Upload artifact
+        if: github.event_name != 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLauncher-${{ steps.get_version.outputs.VERSION }}-win64
+          path: dist/FLauncher-${{ steps.get_version.outputs.VERSION }}-win64.exe
