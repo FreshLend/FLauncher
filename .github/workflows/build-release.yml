@@ -208,125 +208,73 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       
       - name: Install UPX
-        run: brew install upx || true
+        run: brew install upx
       
-      - name: Fix ICNS icon
-        run: |
-          if [ -f src/ui/icon.icns ]; then
-            echo "Testing existing ICNS file..."
-            # Пробуем прочитать ICNS через Python
-            python3 -c "
-            from PIL import Image
-            try:
-                img = Image.open('src/ui/icon.icns')
-                print(f'✓ ICNS is valid: {img.format} {img.size}')
-            except Exception as e:
-                print(f'✗ ICNS is invalid: {e}')
-                exit(1)
-            " || {
-              echo "ICNS is invalid, converting from ICO..."
-              python3 convert_icon.py src/ui/icon.ico src/ui/icon.icns
-            }
-          else
-            echo "ICNS not found, converting from ICO..."
-            python3 convert_icon.py src/ui/icon.ico src/ui/icon.icns
-          fi
+      - name: Install create-dmg
+        run: brew install create-dmg
       
       - name: Build with PyInstaller
-        run: pyinstaller build.spec
+        run: |
+          export PYTHONIOENCODING=utf-8
+          pyinstaller build.spec
+        env:
+          PYTHONIOENCODING: utf-8
       
-      - name: Get version from build.spec
+      - name: Get version
         id: get_version
         run: |
-          VERSION=$(grep -o "VERSION = ['\"]*[^'\"]*['\"]*" build.spec | grep -o "['\"][^'\"]*['\"]" | tr -d "'\"")
-          if [ -z "$VERSION" ]; then
-            if [[ "${{ github.event_name }}" == "release" ]]; then
-              VERSION="${{ github.event.release.tag_name }}"
-            else
-              VERSION="${{ github.event.inputs.version }}"
-            fi
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
           fi
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Detected version: ${VERSION}"
       
-      - name: List dist folder
-        run: ls -la dist/
-      
-      - name: Find and rename macOS app
+      - name: Check .app bundle
         run: |
-          APP_BUNDLE=$(find dist -name "*.app" -type d | head -1)
-          
+          ls -la dist/
+          APP_BUNDLE=$(find dist -name "*.app" -type d | head -n 1)
           if [ -n "$APP_BUNDLE" ]; then
-            if [ "$(basename "$APP_BUNDLE")" != "FLauncher-${{ steps.get_version.outputs.VERSION }}.app" ]; then
-              mv "$APP_BUNDLE" "dist/FLauncher-${{ steps.get_version.outputs.VERSION }}.app"
-              APP_BUNDLE="dist/FLauncher-${{ steps.get_version.outputs.VERSION }}.app"
-            fi
-            
-            if [ -f src/ui/icon.icns ]; then
-              mkdir -p "$APP_BUNDLE/Contents/Resources"
-              cp src/ui/icon.icns "$APP_BUNDLE/Contents/Resources/icon.icns"
-            fi
-            
+            echo "✓ .app bundle found: $APP_BUNDLE"
             echo "APP_BUNDLE=$APP_BUNDLE" >> $GITHUB_ENV
-            echo "Found .app bundle: $APP_BUNDLE"
           else
-            EXECUTABLE=$(find dist -name "FLauncher-*" -type f | head -1)
-            if [ -n "$EXECUTABLE" ]; then
-              echo "Found executable: $EXECUTABLE"
-              mkdir -p "dist/FLauncher-${{ steps.get_version.outputs.VERSION }}.app/Contents/MacOS"
-              mkdir -p "dist/FLauncher-${{ steps.get_version.outputs.VERSION }}.app/Contents/Resources"
-              cp "$EXECUTABLE" "dist/FLauncher-${{ steps.get_version.outputs.VERSION }}.app/Contents/MacOS/FLauncher"
-              chmod +x "dist/FLauncher-${{ steps.get_version.outputs.VERSION }}.app/Contents/MacOS/FLauncher"
-              
-              if [ -f src/ui/icon.icns ]; then
-                cp src/ui/icon.icns "dist/FLauncher-${{ steps.get_version.outputs.VERSION }}.app/Contents/Resources/icon.icns"
-              fi
-              
-              cat > "dist/FLauncher-${{ steps.get_version.outputs.VERSION }}.app/Contents/Info.plist" << EOF
-              <?xml version="1.0" encoding="UTF-8"?>
-              <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-              <plist version="1.0">
-              <dict>
-                  <key>CFBundleExecutable</key>
-                  <string>FLauncher</string>
-                  <key>CFBundleIdentifier</key>
-                  <string>com.flauncher.app</string>
-                  <key>CFBundleName</key>
-                  <string>FLauncher</string>
-                  <key>CFBundleIconFile</key>
-                  <string>icon.icns</string>
-                  <key>CFBundleVersion</key>
-                  <string>${{ steps.get_version.outputs.VERSION }}</string>
-                  <key>CFBundleShortVersionString</key>
-                  <string>${{ steps.get_version.outputs.VERSION }}</string>
-                  <key>CFBundlePackageType</key>
-                  <string>APPL</string>
-                  <key>NSHighResolutionCapable</key>
-                  <true/>
-              </dict>
-              </plist>
-              EOF
-              
-              APP_BUNDLE="dist/FLauncher-${{ steps.get_version.outputs.VERSION }}.app"
-              echo "APP_BUNDLE=$APP_BUNDLE" >> $GITHUB_ENV
-            else
-              echo "No .app or executable found!"
-              ls -la dist/
-              exit 1
-            fi
+            echo "✗ .app bundle not found!"
+            exit 1
           fi
       
       - name: Create DMG
         run: |
           mkdir -p dmg_temp
           cp -r "${{ env.APP_BUNDLE }}" dmg_temp/
+          APP_NAME=$(basename "${{ env.APP_BUNDLE }}")
           ln -s /Applications dmg_temp/Applications
-          hdiutil create -volname "FLauncher ${{ steps.get_version.outputs.VERSION }}" \
-            -srcfolder dmg_temp \
-            -ov -format UDZO \
-            "FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg"
-          echo "DMG created: FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg"
-          ls -la "FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg"
+          
+          ICON_PATH="src/ui/icon.icns"
+          if [ ! -f "$ICON_PATH" ]; then
+            echo "Warning: icon.icns not found, skipping volume icon"
+            ICON_PARAM=""
+          else
+            ICON_PARAM="--volicon $ICON_PATH"
+          fi
+          
+          create-dmg \
+            --volname "FLauncher ${{ steps.get_version.outputs.VERSION }}" \
+            $ICON_PARAM \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "$APP_NAME" 200 190 \
+            --hide-extension "$APP_NAME" \
+            --app-drop-link 600 185 \
+            "FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg" \
+            "dmg_temp/"
+          
+          if [ -f "FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg" ]; then
+            echo "✓ DMG created successfully"
+          else
+            echo "✗ DMG creation failed!"
+            exit 1
+          fi
       
       - name: Upload to Release (macOS)
         if: github.event_name == 'release'
