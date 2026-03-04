@@ -5,6 +5,11 @@ import platform
 import os
 import re
 
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 spec_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
 src_path = os.path.join(spec_dir, 'src')
 
@@ -105,4 +110,5 @@ if is_macos:
             'CFBundleName': f'FLauncher {VERSION}',
             'CFBundleDisplayName': f'FLauncher {VERSION}',
         }
+
     )
