@@ -1,11 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 a = Analysis(
-    ['src/main.py'],  # Указываем путь к main.py внутри src
-    pathex=['src'],    # Добавляем src в путь поиска
+    ['src/main.py'],
+    pathex=['src'],
     binaries=[],
     datas=[
-        ('src/ui', 'ui'),  # Копируем ui из src в корень сборки
+        ('src/ui', 'ui'),
     ],
     hiddenimports=[
         'pypresence',
@@ -41,5 +41,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='src/ui/icon.ico'  # Указываем путь к иконке внутри src
+    icon='src/ui/icon.ico'
+
 )
