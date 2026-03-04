@@ -1,0 +1,76 @@
+name: Build and Release FLauncher
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Версия для сборки'
+        required: true
+        default: 'v0.1.0'
+
+jobs:
+  build-windows:
+    name: Build Windows executable
+    runs-on: windows-latest  # Используем Windows раннер
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          architecture: 'x64'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          if (Test-Path requirements.txt) { pip install -r requirements.txt }
+      
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller build.spec
+      
+      - name: Get version
+        id: get_version
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "RELEASE_NAME=FLauncher-${VERSION}-win64" >> $GITHUB_OUTPUT
+      
+      - name: Rename executable
+        run: |
+          if (Test-Path dist/FLauncher.exe) {
+            Move-Item -Path dist/FLauncher.exe -Destination "dist/FLauncher-${{ steps.get_version.outputs.VERSION }}-win64.exe" -Force
+          } else {
+            Write-Host "Error: FLauncher.exe not found in dist folder"
+            exit 1
+          }
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLauncher-${{ steps.get_version.outputs.VERSION }}-win64
+          path: dist/FLauncher-${{ steps.get_version.outputs.VERSION }}-win64.exe
+          retention-days: 30
+      
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: dist/FLauncher-${{ steps.get_version.outputs.VERSION }}-win64.exe
+          asset_name: FLauncher-${{ steps.get_version.outputs.VERSION }}-win64.exe
+          asset_content_type: application/vnd.microsoft.portable-executable
