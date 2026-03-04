@@ -3,6 +3,7 @@
 Который старается быть похожим на TLauncher.
 
 Особенности:
+- Кроссплатформенность
 - Работа в оффлайн режиме
 - Discord Rich Presence
 - интеграция других репозиториев
@@ -17,7 +18,7 @@
 ## Установка библиотек
 > pip install -r requirements.txt
 
-## Сборка в EXE
+## Сборка
 > pip install pyinstaller  
 > pyinstaller build.spec
 
