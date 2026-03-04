@@ -804,8 +804,40 @@ class UIComponents:
                     if widget:
                         widget.setParent(None)
             
+            from utils import get_platform_asset_pattern
+            asset_pattern = get_platform_asset_pattern()
+            
+            platform_names = {
+                'win64.zip': 'Windows',
+                '.dmg': 'macOS',
+                '.AppImage': 'Linux'
+            }
+            platform_name = platform_names.get(asset_pattern, 'Unknown')
+            
+            platform_info = QLabel(f'Показываются релизы для платформы: {platform_name}')
+            platform_info.setStyleSheet("""
+                font-size: 14px;
+                color: #333;
+                margin: 10px 0;
+                padding: 5px;
+                background-color: rgba(200, 200, 200, 0.3);
+                border-radius: 3px;
+            """)
+            self.release_layout.addWidget(platform_info)
+            
+            filtered_releases = 0
             for release in releases[:10]:
                 if isinstance(release, dict):
+                    assets = release.get('assets', [])
+                    has_platform_asset = any(
+                        asset_pattern in asset.get('name', '') 
+                        for asset in assets
+                    )
+                    
+                    if not has_platform_asset:
+                        continue
+                    
+                    filtered_releases += 1
                     tag_name = release.get('tag_name', '')
                     version = tag_name.replace('voxelcore', '').strip()
                     release_url = release.get('html_url', '#')
@@ -875,6 +907,17 @@ class UIComponents:
                     release_layout.addWidget(separator)
                     
                     self.release_layout.addWidget(release_widget)
+            
+            if filtered_releases == 0:
+                no_releases_label = QLabel(
+                    f'Нет доступных релизов для вашей платформы ({platform_name}).'
+                )
+                no_releases_label.setStyleSheet("""
+                    font-size: 16px; 
+                    color: #666;
+                    margin: 20px 0;
+                """)
+                self.release_layout.addWidget(no_releases_label)
             
             all_releases_label = QLabel()
             all_releases_label.setText(

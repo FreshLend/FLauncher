@@ -1,7 +1,7 @@
 import os
 import json
+import sys
 from pathlib import Path
-
 
 class SettingsManager:
     def __init__(self):
@@ -13,12 +13,34 @@ class SettingsManager:
         self.settings = self._load_settings()
     
     def _get_app_data_path(self):
-        user_folder = Path(os.path.expanduser("~"))
-        return user_folder / "AppData" / "Roaming" / "com.flauncher.app" / "FLauncher" / "VE" / "versions"
+        system = sys.platform
+        
+        if system == 'win32':
+            base_path = Path(os.environ.get('APPDATA', ''))
+            if not base_path:
+                base_path = Path.home() / 'AppData' / 'Roaming'
+            return base_path / 'com.flauncher.app' / 'FLauncher' / 'VC' / 'versions'
+        
+        elif system == 'darwin':
+            return Path.home() / 'Library' / 'Application Support' / 'com.flauncher.app' / 'FLauncher' / 'VC' / 'versions'
+        
+        else:
+            return Path.home() / '.local' / 'share' / 'com.flauncher.app' / 'FLauncher' / 'VC' / 'versions'
     
     def _get_settings_path(self):
-        user_folder = Path(os.path.expanduser("~"))
-        return user_folder / "AppData" / "Roaming" / "com.flauncher.app" / "FLauncher" / "settings.json"
+        system = sys.platform
+        
+        if system == 'win32':
+            base_path = Path(os.environ.get('APPDATA', ''))
+            if not base_path:
+                base_path = Path.home() / 'AppData' / 'Roaming'
+            return base_path / 'com.flauncher.app' / 'FLauncher' / 'settings.json'
+        
+        elif system == 'darwin':
+            return Path.home() / 'Library' / 'Application Support' / 'com.flauncher.app' / 'FLauncher' / 'settings.json'
+        
+        else:
+            return Path.home() / '.config' / 'com.flauncher.app' / 'FLauncher' / 'settings.json'
     
     def _create_directories(self):
         self.app_data_path.mkdir(parents=True, exist_ok=True)
@@ -39,7 +61,7 @@ class SettingsManager:
             return default_settings
         
         try:
-            with open(self.settings_path, 'r') as f:
+            with open(self.settings_path, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             return default_settings
@@ -48,7 +70,7 @@ class SettingsManager:
         if settings is None:
             settings = self.settings
         
-        with open(self.settings_path, 'w') as f:
+        with open(self.settings_path, 'w', encoding='utf-8') as f:
             json.dump(settings, f, indent=4)
     
     def add_github_repo(self, repo):

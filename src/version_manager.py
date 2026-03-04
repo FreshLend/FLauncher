@@ -3,13 +3,14 @@ import json
 import requests
 from pathlib import Path
 
-from utils import MAX_LOAD, MAIN_REPO
+from utils import MAX_LOAD, MAIN_REPO, get_platform_asset_pattern
 
 
 class VersionManager:
     def __init__(self, settings_manager):
         self.settings_manager = settings_manager
         self.app_data_path = settings_manager.app_data_path
+        self.asset_pattern = get_platform_asset_pattern()
     
     def get_github_repo_versions(self, repo):
         try:
@@ -18,11 +19,28 @@ class VersionManager:
                 timeout=5,
                 headers={'Accept': 'application/vnd.github.v3+json'}
             )
-            return [
-                (release['tag_name'], repo)
-                for release in response.json()
-                if isinstance(release, dict) and 'tag_name' in release
-            ]
+            
+            releases = response.json()
+            valid_versions = []
+            
+            for release in releases:
+                if not isinstance(release, dict) or 'tag_name' not in release:
+                    continue
+                
+                assets = release.get('assets', [])
+                has_platform_asset = False
+                
+                for asset in assets:
+                    asset_name = asset.get('name', '')
+                    if self.asset_pattern in asset_name:
+                        has_platform_asset = True
+                        break
+                
+                if has_platform_asset:
+                    valid_versions.append((release['tag_name'], repo))
+            
+            return valid_versions
+            
         except Exception as e:
             print(f"Ошибка получения версий из {repo}: {e}")
             return []
@@ -31,16 +49,12 @@ class VersionManager:
         all_versions = []
         
         main_versions = self.get_github_repo_versions(MAIN_REPO)
-        filtered = [v[0] for v in main_versions 
-                   if not v[0].startswith(('v11', 'v12'))]
-        all_versions.extend(filtered)
+        all_versions.extend([v[0] for v in main_versions])
         
         for repo in self.settings_manager.settings.get("github_repos", []):
             try:
                 repo_versions = self.get_github_repo_versions(repo)
-                filtered = [v[0] for v in repo_versions 
-                          if not v[0].startswith(('v11', 'v12'))]
-                all_versions.extend(filtered)
+                all_versions.extend([v[0] for v in repo_versions])
             except Exception as e:
                 print(f"Ошибка загрузки {repo}: {e}")
         

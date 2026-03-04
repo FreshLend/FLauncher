@@ -116,17 +116,14 @@ class FLauncher(QMainWindow):
                 self.download_version(selected_version)
             return
         
-        exe_files = [
-            f for f in version_folder.iterdir() 
-            if f.is_file() and f.suffix.lower() == ".exe" and f.stem.lower() != "vctest"
-        ]
+        executable = self.download_manager.find_executable(version_folder)
         
-        if exe_files:
-            self.launch_game(exe_files[0], version_folder, selected_version)
+        if executable:
+            self.launch_game(executable, version_folder, selected_version)
         else:
             self.show_error_message(
                 "Ошибка", 
-                f"Не найден исполняемый файл в папке {selected_version}"
+                f"Не найден исполняемый файл для вашей платформы в папке {selected_version}"
             )
     
     def download_version(self, version_tag):
