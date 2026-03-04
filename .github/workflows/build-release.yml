@@ -1,4 +1,4 @@
-name: Build and Release
+name: Build and Release FLauncher
 
 on:
   release:
@@ -28,7 +28,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller pillow
-          if (Test-Path requirements.txt) { pip install -r requirements.txt }
+          if (Test-Path requirements.txt) { pip install -r requirements.txt; }
       
       - name: Install UPX
         run: choco install upx -y
@@ -54,6 +54,10 @@ jobs:
             VERSION="${{ github.event.inputs.version }}"
           fi
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+      
+      - name: List dist folder
+        run: ls -la dist/
+        shell: bash
       
       - name: Upload to Release (Windows)
         if: github.event_name == 'release'
@@ -103,7 +107,9 @@ jobs:
             libgl1-mesa-glx \
             libgl1-mesa-dri \
             libegl1 \
-            upx
+            upx \
+            file \
+            wget
       
       - name: Install Python dependencies
         run: |
@@ -126,9 +132,16 @@ jobs:
           fi
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
       
+      - name: List dist folder
+        run: ls -la dist/
+      
+      - name: Make binary executable
+        run: |
+          chmod +x dist/FLauncher-${{ steps.get_version.outputs.VERSION }}
+      
       - name: Create AppImage
         run: |
-          wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
           chmod +x linuxdeploy-x86_64.AppImage
           
           mkdir -p AppDir/usr/bin
@@ -138,7 +151,7 @@ jobs:
           cp dist/FLauncher-${{ steps.get_version.outputs.VERSION }} AppDir/usr/bin/flauncher
           chmod +x AppDir/usr/bin/flauncher
           
-          cat > AppDir/usr/share/applications/flauncher.desktop << EOF
+          cat > AppDir/usr/share/applications/flauncher.desktop << 'EOF'
           [Desktop Entry]
           Name=FLauncher
           Comment=VoxelCore Launcher
@@ -151,16 +164,28 @@ jobs:
           
           if [ -f src/ui/icon.png ]; then
             cp src/ui/icon.png AppDir/usr/share/icons/hicolor/256x256/apps/flauncher.png
+            echo "PNG icon copied"
           else
-            echo "No PNG icon found, using default"
+            echo "Warning: PNG icon not found at src/ui/icon.png"
           fi
           
           ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
           
-          mv FLauncher-*.AppImage "FLauncher-${{ steps.get_version.outputs.VERSION }}-x86_64.AppImage" 2>/dev/null || true
+          if [ -f FLauncher-*.AppImage ]; then
+            mv FLauncher-*.AppImage "FLauncher-${{ steps.get_version.outputs.VERSION }}-x86_64.AppImage"
+            echo "AppImage created successfully"
+          else
+            echo "AppImage not created, trying appimagetool..."
+            wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+            chmod +x appimagetool-x86_64.AppImage
+            ./appimagetool-x86_64.AppImage AppDir "FLauncher-${{ steps.get_version.outputs.VERSION }}-x86_64.AppImage"
+          fi
+      
+      - name: List AppImage
+        run: ls -la FLauncher-*.AppImage || echo "No AppImage found"
       
       - name: Upload to Release (Linux)
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' && success()
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -171,7 +196,7 @@ jobs:
           asset_content_type: application/x-iso9660-appimage
       
       - name: Upload artifact (Linux)
-        if: github.event_name != 'release'
+        if: github.event_name != 'release' && success()
         uses: actions/upload-artifact@v4
         with:
           name: FLauncher-${{ steps.get_version.outputs.VERSION }}-linux
@@ -196,10 +221,19 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       
       - name: Install UPX
-        run: brew install upx
+        run: brew install upx || true
       
       - name: Install create-dmg
-        run: brew install create-dmg
+        run: brew install create-dmg || true
+      
+      - name: Check icon
+        run: |
+          if [ -f src/ui/icon.icns ]; then
+            echo "ICNS icon found"
+            file src/ui/icon.icns
+          else
+            echo "Warning: ICNS icon not found at src/ui/icon.icns"
+          fi
       
       - name: Build with PyInstaller
         run: |
@@ -218,40 +252,95 @@ jobs:
           fi
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
       
-      - name: Check .app bundle
+      - name: List dist folder
+        run: ls -la dist/
+      
+      - name: Find .app bundle
+        id: find_app
         run: |
-          ls -la dist/
-          if [ -d "dist/FLauncher-${{ steps.get_version.outputs.VERSION }}.app" ]; then
-            echo "✓ .app bundle created successfully"
+          APP_BUNDLE=$(find dist -name "*.app" -type d | head -n 1)
+          
+          if [ -n "$APP_BUNDLE" ]; then
+            echo "APP_BUNDLE=$APP_BUNDLE" >> $GITHUB_ENV
+            echo "Found .app bundle: $APP_BUNDLE"
           else
-            echo "✗ .app bundle not found!"
+            echo "No .app bundle found!"
+            ls -la dist/
             exit 1
+          fi
+      
+      - name: Verify .app structure
+        run: |
+          echo "Contents of .app bundle:"
+          ls -la "${{ env.APP_BUNDLE }}/Contents/MacOS/" || echo "No MacOS folder"
+          ls -la "${{ env.APP_BUNDLE }}/Contents/Resources/" || echo "No Resources folder"
+          
+          if [ -f "${{ env.APP_BUNDLE }}/Contents/MacOS/FLauncher" ]; then
+            echo "Executable found"
+            file "${{ env.APP_BUNDLE }}/Contents/MacOS/FLauncher"
+          else
+            echo "Warning: Executable not found in standard location"
           fi
       
       - name: Create DMG
         run: |
           mkdir -p dmg_temp
           
-          cp -r "dist/FLauncher-${{ steps.get_version.outputs.VERSION }}.app" dmg_temp/
+          cp -r "${{ env.APP_BUNDLE }}" dmg_temp/
+          
+          APP_NAME=$(basename "${{ env.APP_BUNDLE }}")
           
           ln -s /Applications dmg_temp/Applications
           
-          create-dmg \
-            --volname "FLauncher ${{ steps.get_version.outputs.VERSION }}" \
-            --volicon "src/ui/icon.icns" \
-            --window-pos 200 120 \
-            --window-size 800 400 \
-            --icon-size 100 \
-            --icon "FLauncher-${{ steps.get_version.outputs.VERSION }}.app" 200 190 \
-            --hide-extension "FLauncher-${{ steps.get_version.outputs.VERSION }}.app" \
-            --app-drop-link 600 185 \
-            "FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg" \
-            "dmg_temp/"
-          
-          ls -la "FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg"
+          if [ -f src/ui/icon.icns ]; then
+            echo "Creating DMG with icon..."
+            create-dmg \
+              --volname "FLauncher ${{ steps.get_version.outputs.VERSION }}" \
+              --volicon "src/ui/icon.icns" \
+              --window-pos 200 120 \
+              --window-size 800 400 \
+              --icon-size 100 \
+              --icon "$APP_NAME" 200 190 \
+              --hide-extension "$APP_NAME" \
+              --app-drop-link 600 185 \
+              "FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg" \
+              "dmg_temp/" || {
+                echo "create-dmg failed, trying hdiutil..."
+                hdiutil create -volname "FLauncher ${{ steps.get_version.outputs.VERSION }}" \
+                  -srcfolder dmg_temp \
+                  -ov -format UDZO \
+                  "FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg"
+              }
+          else
+            echo "Creating DMG without icon..."
+            create-dmg \
+              --volname "FLauncher ${{ steps.get_version.outputs.VERSION }}" \
+              --window-pos 200 120 \
+              --window-size 800 400 \
+              --icon-size 100 \
+              --icon "$APP_NAME" 200 190 \
+              --hide-extension "$APP_NAME" \
+              --app-drop-link 600 185 \
+              "FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg" \
+              "dmg_temp/" || {
+                echo "create-dmg failed, trying hdiutil..."
+                hdiutil create -volname "FLauncher ${{ steps.get_version.outputs.VERSION }}" \
+                  -srcfolder dmg_temp \
+                  -ov -format UDZO \
+                  "FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg"
+              }
+          fi
+      
+      - name: List DMG
+        run: |
+          ls -la FLauncher-*-macos.dmg || echo "No DMG found"
+          if [ -f "FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg" ]; then
+            echo "DMG created successfully"
+            file "FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg"
+          fi
       
       - name: Upload to Release (macOS)
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' && success()
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -262,7 +351,7 @@ jobs:
           asset_content_type: application/x-apple-diskimage
       
       - name: Upload artifact (macOS)
-        if: github.event_name != 'release'
+        if: github.event_name != 'release' && success()
         uses: actions/upload-artifact@v4
         with:
           name: FLauncher-${{ steps.get_version.outputs.VERSION }}-macos
