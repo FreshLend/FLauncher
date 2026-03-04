@@ -41,7 +41,7 @@ jobs:
         id: get_version
         shell: bash
         run: |
-          VERSION=$(grep -oP "VERSION\s*=\s*['\"]\K[^'\"]+" build.spec | head -1)
+          VERSION=$(grep -o "VERSION = ['\"]*[^'\"]*['\"]*" build.spec | grep -o "['\"][^'\"]*['\"]" | tr -d "'\"")
           if [ -z "$VERSION" ]; then
             if [[ "${{ github.event_name }}" == "release" ]]; then
               VERSION="${{ github.event.release.tag_name }}"
@@ -132,7 +132,7 @@ jobs:
       - name: Get version from build.spec
         id: get_version
         run: |
-          VERSION=$(grep -oP "VERSION\s*=\s*['\"]\K[^'\"]+" build.spec | head -1)
+          VERSION=$(grep -o "VERSION = ['\"]*[^'\"]*['\"]*" build.spec | grep -o "['\"][^'\"]*['\"]" | tr -d "'\"")
           if [ -z "$VERSION" ]; then
             if [[ "${{ github.event_name }}" == "release" ]]; then
               VERSION="${{ github.event.release.tag_name }}"
@@ -192,7 +192,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install pyinstaller
+          pip install pyinstaller pillow
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       
       - name: Install UPX
@@ -204,7 +204,7 @@ jobs:
       - name: Get version from build.spec
         id: get_version
         run: |
-          VERSION=$(grep -oP "VERSION\s*=\s*['\"]\K[^'\"]+" build.spec | head -1)
+          VERSION=$(grep -o "VERSION = ['\"]*[^'\"]*['\"]*" build.spec | grep -o "['\"][^'\"]*['\"]" | tr -d "'\"")
           if [ -z "$VERSION" ]; then
             if [[ "${{ github.event_name }}" == "release" ]]; then
               VERSION="${{ github.event.release.tag_name }}"
@@ -279,16 +279,12 @@ jobs:
       - name: Create DMG
         run: |
           mkdir -p dmg_temp
-          
           cp -r "${{ env.APP_BUNDLE }}" dmg_temp/
-          
           ln -s /Applications dmg_temp/Applications
-          
           hdiutil create -volname "FLauncher ${{ steps.get_version.outputs.VERSION }}" \
             -srcfolder dmg_temp \
             -ov -format UDZO \
             "FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg"
-          
           echo "DMG created: FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg"
           ls -la "FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg"
       
