@@ -12,10 +12,10 @@ on:
 
 jobs:
   build-windows:
-    name: Windows Build
+    name: Windows
     runs-on: windows-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
       
       - name: Setup Python
@@ -26,19 +26,15 @@ jobs:
       
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
           pip install pyinstaller
           if (Test-Path requirements.txt) { pip install -r requirements.txt; }
       
-      - name: Install UPX
-        run: choco install upx -y
-      
-      - name: Build with PyInstaller
+      - name: Build
         run: pyinstaller build.spec
         shell: pwsh
       
-      - name: Get version from build.spec (Windows)
-        id: get_version
+      - name: Get version
+        id: version
         shell: pwsh
         run: |
           $content = Get-Content -Path build.spec -Raw
@@ -47,64 +43,41 @@ jobs:
           
           if ($match.Success) {
             $VERSION = $match.Groups[1].Value
-            Write-Host "Found version in build.spec: $VERSION"
           } else {
-            Write-Host "Version not found in build.spec, using event version"
-            if ("${{ github.event_name }}" -eq "release") {
-              $VERSION = "${{ github.event.release.tag_name }}"
-            } else {
-              $VERSION = "${{ github.event.inputs.version }}"
-            }
+            $VERSION = "${{ github.event.inputs.version }}"
           }
-          
-          Write-Host "VERSION=$VERSION"
           echo "VERSION=$VERSION" >> $env:GITHUB_OUTPUT
       
-      - name: List dist folder
+      - name: Rename
         run: |
-          Write-Host "Files in dist folder:"
-          Get-ChildItem -Path dist -Name
+          $file = Get-ChildItem -Path dist -Filter "FLauncher-*.exe" | Select-Object -First 1
+          $newname = "FLauncher-${{ steps.version.outputs.VERSION }}-win64.exe"
+          Move-Item -Path $file.FullName -Destination "dist/$newname" -Force
         shell: pwsh
       
-      - name: Rename Windows executable
-        run: |
-          $files = Get-ChildItem -Path dist -Filter "FLauncher-*.exe"
-          if ($files.Count -gt 0) {
-            $file = $files[0]
-            $newname = "FLauncher-${{ steps.get_version.outputs.VERSION }}-win64.exe"
-            Move-Item -Path $file.FullName -Destination "dist/$newname" -Force
-            Write-Host "Renamed to: $newname"
-            Write-Host "Final file: $(Get-ChildItem -Path dist -Filter $newname | Select-Object Name, Length)"
-          } else {
-            Write-Host "Error: No FLauncher-*.exe files found in dist folder"
-            Get-ChildItem -Path dist
-            exit 1
-          }
-        shell: pwsh
-      
-      - name: Upload to Release (Windows)
+      - name: Upload to Release
         if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: dist/FLauncher-${{ steps.get_version.outputs.VERSION }}-win64.exe
-          asset_name: FLauncher-${{ steps.get_version.outputs.VERSION }}-win64.exe
+          asset_path: dist/FLauncher-${{ steps.version.outputs.VERSION }}-win64.exe
+          asset_name: FLauncher-${{ steps.version.outputs.VERSION }}-win64.exe
           asset_content_type: application/vnd.microsoft.portable-executable
       
-      - name: Upload artifact (Windows)
+      - name: Upload artifact
         if: github.event_name != 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: FLauncher-${{ steps.get_version.outputs.VERSION }}-win64
-          path: dist/FLauncher-${{ steps.get_version.outputs.VERSION }}-win64.exe
+          name: FLauncher-${{ steps.version.outputs.VERSION }}-win64
+          path: dist/FLauncher-${{ steps.version.outputs.VERSION }}-win64.exe
 
   build-linux:
-    name: Linux Build
+    name: Linux
     runs-on: ubuntu-22.04
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
       
       - name: Setup Python
@@ -115,85 +88,73 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            libxcb-xinerama0 \
-            libxcb-icccm4 \
-            libxcb-image0 \
-            libxcb-keysyms1 \
-            libxcb-randr0 \
-            libxcb-render-util0 \
-            libxcb-shape0 \
-            libxcb-sync1 \
-            libxcb-xfixes0 \
-            libxcb-xkb1 \
-            libxkbcommon-x11-0 \
-            libgl1-mesa-glx \
-            libgl1-mesa-dri \
-            libegl1 \
-            upx
+          sudo apt-get install -y libfuse2
       
-      - name: Install Python dependencies
+      - name: Install dependencies
         run: |
-          pip install --upgrade pip
           pip install pyinstaller
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       
-      - name: Build with PyInstaller
+      - name: Build
         run: pyinstaller build.spec
       
-      - name: Get version from build.spec
-        id: get_version
+      - name: Get version
+        id: version
         run: |
           VERSION=$(grep -o "VERSION = ['\"]*[^'\"]*['\"]*" build.spec | grep -o "['\"][^'\"]*['\"]" | tr -d "'\"")
           if [ -z "$VERSION" ]; then
-            if [[ "${{ github.event_name }}" == "release" ]]; then
-              VERSION="${{ github.event.release.tag_name }}"
-            else
-              VERSION="${{ github.event.inputs.version }}"
-            fi
+            VERSION="${{ github.event.inputs.version }}"
           fi
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Detected version: ${VERSION}"
       
-      - name: List dist folder
-        run: ls -la dist/
-      
-      - name: Rename Linux executable
+      - name: Create AppImage
         run: |
-          FILE=$(find dist -name "FLauncher-*" -type f | head -1)
-          if [ -n "$FILE" ]; then
-            mv "$FILE" "dist/FLauncher-${{ steps.get_version.outputs.VERSION }}"
-            chmod +x "dist/FLauncher-${{ steps.get_version.outputs.VERSION }}"
-            echo "Renamed to: FLauncher-${{ steps.get_version.outputs.VERSION }}"
-          else
-            echo "No matching file found in dist folder"
-            ls -la dist/
-            exit 1
+          wget -q "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+          chmod +x appimagetool-x86_64.AppImage
+          
+          mkdir -p AppDir/usr/bin
+          cp dist/FLauncher-${{ steps.version.outputs.VERSION }} AppDir/usr/bin/flauncher
+          chmod +x AppDir/usr/bin/flauncher
+          
+          cat > AppDir/flauncher.desktop <<EOF
+          [Desktop Entry]
+          Name=FLauncher
+          Exec=flauncher
+          Icon=flauncher
+          Type=Application
+          Categories=Game;
+          EOF
+          
+          if [ -f src/ui/icon.png ]; then
+            cp src/ui/icon.png AppDir/flauncher.png
           fi
+          
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage AppDir
+          mv FLauncher-*.AppImage FLauncher-${{ steps.version.outputs.VERSION }}-x86_64.AppImage
       
-      - name: Upload to Release (Linux)
+      - name: Upload to Release
         if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: dist/FLauncher-${{ steps.get_version.outputs.VERSION }}
-          asset_name: FLauncher-${{ steps.get_version.outputs.VERSION }}-linux-x64
-          asset_content_type: application/octet-stream
+          asset_path: FLauncher-${{ steps.version.outputs.VERSION }}-x86_64.AppImage
+          asset_name: FLauncher-${{ steps.version.outputs.VERSION }}-x86_64.AppImage
+          asset_content_type: application/x-iso9660-appimage
       
-      - name: Upload artifact (Linux)
+      - name: Upload artifact
         if: github.event_name != 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: FLauncher-${{ steps.get_version.outputs.VERSION }}-linux
-          path: dist/FLauncher-${{ steps.get_version.outputs.VERSION }}
+          name: FLauncher-${{ steps.version.outputs.VERSION }}-linux
+          path: FLauncher-${{ steps.version.outputs.VERSION }}-x86_64.AppImage
 
   build-macos:
-    name: macOS Build
+    name: macOS
     runs-on: macos-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
       
       - name: Setup Python
@@ -203,25 +164,14 @@ jobs:
       
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
-          pip install pyinstaller pillow
+          pip install pyinstaller
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       
-      - name: Install UPX
-        run: brew install upx
-      
-      - name: Install create-dmg
-        run: brew install create-dmg
-      
-      - name: Build with PyInstaller
-        run: |
-          export PYTHONIOENCODING=utf-8
-          pyinstaller build.spec
-        env:
-          PYTHONIOENCODING: utf-8
+      - name: Build
+        run: pyinstaller build.spec
       
       - name: Get version
-        id: get_version
+        id: version
         run: |
           if [[ "${{ github.event_name }}" == "release" ]]; then
             VERSION="${{ github.event.release.tag_name }}"
@@ -230,66 +180,31 @@ jobs:
           fi
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
       
-      - name: Check .app bundle
-        run: |
-          ls -la dist/
-          APP_BUNDLE=$(find dist -name "*.app" -type d | head -n 1)
-          if [ -n "$APP_BUNDLE" ]; then
-            echo "✓ .app bundle found: $APP_BUNDLE"
-            echo "APP_BUNDLE=$APP_BUNDLE" >> $GITHUB_ENV
-          else
-            echo "✗ .app bundle not found!"
-            exit 1
-          fi
-      
       - name: Create DMG
         run: |
+          APP_BUNDLE=$(find dist -name "*.app" -type d | head -n 1)
           mkdir -p dmg_temp
-          cp -r "${{ env.APP_BUNDLE }}" dmg_temp/
-          APP_NAME=$(basename "${{ env.APP_BUNDLE }}")
+          cp -r "$APP_BUNDLE" dmg_temp/
           ln -s /Applications dmg_temp/Applications
-          
-          ICON_PATH="src/ui/icon.icns"
-          if [ ! -f "$ICON_PATH" ]; then
-            echo "Warning: icon.icns not found, skipping volume icon"
-            ICON_PARAM=""
-          else
-            ICON_PARAM="--volicon $ICON_PATH"
-          fi
-          
-          create-dmg \
-            --volname "FLauncher ${{ steps.get_version.outputs.VERSION }}" \
-            $ICON_PARAM \
-            --window-pos 200 120 \
-            --window-size 800 400 \
-            --icon-size 100 \
-            --icon "$APP_NAME" 200 190 \
-            --hide-extension "$APP_NAME" \
-            --app-drop-link 600 185 \
-            "FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg" \
-            "dmg_temp/"
-          
-          if [ -f "FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg" ]; then
-            echo "✓ DMG created successfully"
-          else
-            echo "✗ DMG creation failed!"
-            exit 1
-          fi
+          hdiutil create -volname "FLauncher ${{ steps.version.outputs.VERSION }}" \
+            -srcfolder dmg_temp \
+            -ov -format UDZO \
+            "FLauncher-${{ steps.version.outputs.VERSION }}-macos.dmg"
       
-      - name: Upload to Release (macOS)
+      - name: Upload to Release
         if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg
-          asset_name: FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg
+          asset_path: FLauncher-${{ steps.version.outputs.VERSION }}-macos.dmg
+          asset_name: FLauncher-${{ steps.version.outputs.VERSION }}-macos.dmg
           asset_content_type: application/x-apple-diskimage
       
-      - name: Upload artifact (macOS)
+      - name: Upload artifact
         if: github.event_name != 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: FLauncher-${{ steps.get_version.outputs.VERSION }}-macos
-          path: FLauncher-${{ steps.get_version.outputs.VERSION }}-macos.dmg
+          name: FLauncher-${{ steps.version.outputs.VERSION }}-macos
+          path: FLauncher-${{ steps.version.outputs.VERSION }}-macos.dmg
