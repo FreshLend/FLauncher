@@ -38,11 +38,23 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $content = Get-Content -Path build.spec -Raw
-          $pattern = 'VERSION\s*=\s*[''"]([^''"]+)[''"]'
-          $match = [regex]::Match($content, $pattern)
-          $VERSION = if ($match.Success) { $match.Groups[1].Value } else { "${{ github.event.inputs.version }}" }
+          # Сначала пробуем получить версию из тега релиза
+          if ("${{ github.event_name }}" -eq "release") {
+            $VERSION = "${{ github.event.release.tag_name }}"
+          } 
+          # Иначе из параметров workflow_dispatch
+          elseif ("${{ github.event.inputs.version }}") {
+            $VERSION = "${{ github.event.inputs.version }}"
+          }
+          # Иначе из файла build.spec
+          else {
+            $content = Get-Content -Path build.spec -Raw
+            $pattern = 'VERSION\s*=\s*[''"]([^''"]+)[''"]'
+            $match = [regex]::Match($content, $pattern)
+            $VERSION = if ($match.Success) { $match.Groups[1].Value } else { "unknown" }
+          }
           echo "VERSION=$VERSION" >> $env:GITHUB_OUTPUT
+          echo "Using version: $VERSION"
       
       - name: Rename
         run: |
@@ -94,8 +106,15 @@ jobs:
       - name: Get version
         id: version
         run: |
-          VERSION=$(grep -o "VERSION = ['\"]*[^'\"]*['\"]*" build.spec | grep -o "['\"][^'\"]*['\"]" | tr -d "'\"")
-          echo "VERSION=${VERSION:-${{ github.event.inputs.version }}}" >> $GITHUB_OUTPUT
+          if [ "${{ github.event_name }}" == "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          elif [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=$(grep -o "VERSION = ['\"]*[^'\"]*['\"]*" build.spec | grep -o "['\"][^'\"]*['\"]" | tr -d "'\"")
+          fi
+          echo "VERSION=${VERSION:-unknown}" >> $GITHUB_OUTPUT
+          echo "Using version: $VERSION"
       
       - name: Prepare binary
         run: |
@@ -174,9 +193,15 @@ jobs:
       - name: Get version
         id: version
         run: |
-          VERSION="${{ github.event.inputs.version }}"
-          [ "${{ github.event_name }}" == "release" ] && VERSION="${{ github.event.release.tag_name }}"
-          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          if [ "${{ github.event_name }}" == "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          elif [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=$(grep -o "VERSION = ['\"]*[^'\"]*['\"]*" build.spec | grep -o "['\"][^'\"]*['\"]" | tr -d "'\"")
+          fi
+          echo "VERSION=${VERSION:-unknown}" >> $GITHUB_OUTPUT
+          echo "Using version: $VERSION"
       
       - name: Create DMG
         run: |
