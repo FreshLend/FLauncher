@@ -1,9 +1,12 @@
 name: Build and Release
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Версия для сборки'
+        required: true
+        default: 'T0'
 
 jobs:
   build-windows:
@@ -29,35 +32,28 @@ jobs:
         run: pyinstaller build.spec
         shell: pwsh
       
-      - name: Find and rename EXE
-        id: artifact
+      - name: Get version
+        id: version
         shell: pwsh
         run: |
-          $file = Get-ChildItem -Path dist -Filter "FLauncher-*.exe" | Select-Object -First 1
-          if ($file -eq $null) {
-            Write-Error "Не найден exe файл в dist"
-            exit 1
-          }
-          $newname = "FLauncher_win64.exe"
-          Write-Host "Переименовываем $($file.Name) в $newname"
-          Move-Item -Path $file.FullName -Destination "dist/$newname" -Force
-          echo "artifact_path=dist/$newname" >> $env:GITHUB_OUTPUT
-          echo "artifact_name=$newname" >> $env:GITHUB_OUTPUT
+          $content = Get-Content -Path build.spec -Raw
+          $pattern = 'VERSION\s*=\s*[''"]([^''"]+)[''"]'
+          $match = [regex]::Match($content, $pattern)
+          $VERSION = if ($match.Success) { $match.Groups[1].Value } else { "${{ github.event.inputs.version }}" }
+          echo "VERSION=$VERSION" >> $env:GITHUB_OUTPUT
       
-      - name: Upload to Release
-        if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ steps.artifact.outputs.artifact_path }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Rename
+        run: |
+          $file = Get-ChildItem -Path dist -Filter "FLauncher-*.exe" | Select-Object -First 1
+          $newname = "FLauncher-${{ steps.version.outputs.VERSION }}_win64.exe"
+          Move-Item -Path $file.FullName -Destination "dist/$newname" -Force
+        shell: pwsh
       
       - name: Upload artifact
-        if: github.event_name != 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: FLauncher_win64
-          path: ${{ steps.artifact.outputs.artifact_path }}
-          if-no-files-found: error
+          name: FLauncher-${{ steps.version.outputs.VERSION }}_win64
+          path: dist/FLauncher-${{ steps.version.outputs.VERSION }}_win64.exe
 
   build-linux:
     name: Linux Build
@@ -81,15 +77,15 @@ jobs:
       - name: Build
         run: pyinstaller build.spec
       
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(grep -o "VERSION = ['\"]*[^'\"]*['\"]*" build.spec | grep -o "['\"][^'\"]*['\"]" | tr -d "'\"")
+          echo "VERSION=${VERSION:-${{ github.event.inputs.version }}}" >> $GITHUB_OUTPUT
+      
       - name: Prepare binary
-        id: artifact
         run: |
           BINARY=$(find dist -name "FLauncher-*" -type f | head -1)
-          if [ -z "$BINARY" ]; then
-            echo "Ошибка: не найден бинарник в dist"
-            exit 1
-          fi
-          echo "Найден бинарник: $BINARY"
           cp "$BINARY" dist/flauncher
           chmod +x dist/flauncher
       
@@ -120,30 +116,13 @@ jobs:
           chmod +x AppDir/AppRun
           
           ARCH=x86_64 ./appimagetool-x86_64.AppImage AppDir
-          
-          APPIMAGE_FILE=$(ls FLauncher-*.AppImage 2>/dev/null | head -1)
-          if [ -z "$APPIMAGE_FILE" ]; then
-            echo "Ошибка: AppImage не создан"
-            exit 1
-          fi
-          mv "$APPIMAGE_FILE" "FLauncher_linux_x86-64.AppImage"
-          echo "artifact_path=FLauncher_linux_x86-64.AppImage" >> $GITHUB_OUTPUT
-          echo "artifact_name=FLauncher_linux_x86-64.AppImage" >> $GITHUB_OUTPUT
-      
-      - name: Upload to Release
-        if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ steps.artifact.outputs.artifact_path }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          mv FLauncher-*.AppImage FLauncher-${{ steps.version.outputs.VERSION }}_x86-64.AppImage
       
       - name: Upload artifact
-        if: github.event_name != 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: FLauncher_linux_x86-64
-          path: ${{ steps.artifact.outputs.artifact_path }}
-          if-no-files-found: error
+          name: FLauncher-${{ steps.version.outputs.VERSION }}_x86-64
+          path: FLauncher-${{ steps.version.outputs.VERSION }}_x86-64.AppImage
 
   build-macos:
     name: macOS Build
@@ -166,40 +145,25 @@ jobs:
       - name: Build
         run: pyinstaller build.spec
       
+      - name: Get version
+        id: version
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+      
       - name: Create DMG
-        id: artifact
         run: |
           APP_BUNDLE=$(find dist -name "*.app" -type d | head -n 1)
-          if [ -z "$APP_BUNDLE" ]; then
-            echo "Ошибка: не найден .app bundle в dist"
-            exit 1
-          fi
-          
-          echo "Найден .app: $APP_BUNDLE"
           mkdir -p dmg_temp
           cp -r "$APP_BUNDLE" dmg_temp/
           ln -s /Applications dmg_temp/Applications
-          
-          DMG_NAME="FLauncher_macos.dmg"
-          hdiutil create -volname "FLauncher" \
+          hdiutil create -volname "FLauncher ${{ steps.version.outputs.VERSION }}" \
             -srcfolder dmg_temp \
             -ov -format UDZO \
-            "$DMG_NAME"
-          
-          echo "artifact_path=$DMG_NAME" >> $GITHUB_OUTPUT
-          echo "artifact_name=$DMG_NAME" >> $GITHUB_OUTPUT
-      
-      - name: Upload to Release
-        if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ steps.artifact.outputs.artifact_path }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+            "FLauncher-${{ steps.version.outputs.VERSION }}_macos.dmg"
       
       - name: Upload artifact
-        if: github.event_name != 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: FLauncher_macos
-          path: ${{ steps.artifact.outputs.artifact_path }}
-          if-no-files-found: error
+          name: FLauncher-${{ steps.version.outputs.VERSION }}_macos
+          path: FLauncher-${{ steps.version.outputs.VERSION }}_macos.dmg
