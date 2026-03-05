@@ -21,5 +21,3 @@
 ## Сборка
 > pip install pyinstaller  
 > pyinstaller build.spec
-
-[[Скачать FLauncher]](https://github.com/FreshLend/FLauncher/releases)
