@@ -4,11 +4,6 @@ on:
   release:
     types: [published]
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Версия для сборки'
-        required: true
-        default: 'T0'
 
 jobs:
   build-windows:
@@ -34,58 +29,34 @@ jobs:
         run: pyinstaller build.spec
         shell: pwsh
       
-      - name: Get version
-        id: version
+      - name: Find and rename EXE
+        id: artifact
         shell: pwsh
-        run: |
-          if ("${{ github.event_name }}" -eq "release") {
-            $VERSION = "${{ github.event.release.tag_name }}"
-          } else {
-            $VERSION = "${{ github.event.inputs.version }}"
-          }
-          
-          if ([string]::IsNullOrEmpty($VERSION)) {
-            Write-Host "Версия не определена через event, парсим build.spec..."
-            $content = Get-Content -Path build.spec -Raw
-            $pattern = 'VERSION\s*=\s*[''"]([^''"]+)[''"]'
-            $match = [regex]::Match($content, $pattern)
-            if ($match.Success) { 
-              $VERSION = $match.Groups[1].Value
-              Write-Host "Найдена версия в build.spec: $VERSION"
-            } else {
-              $VERSION = "unknown"
-              Write-Host "Версия не найдена, используем 'unknown'"
-            }
-          }
-          
-          Write-Host "Итоговая версия: $VERSION"
-          echo "VERSION=$VERSION" >> $env:GITHUB_OUTPUT
-      
-      - name: Rename
         run: |
           $file = Get-ChildItem -Path dist -Filter "FLauncher-*.exe" | Select-Object -First 1
           if ($file -eq $null) {
             Write-Error "Не найден exe файл в dist"
             exit 1
           }
-          $newname = "FLauncher-${{ steps.version.outputs.VERSION }}_win64.exe"
+          $newname = "FLauncher_win64.exe"
           Write-Host "Переименовываем $($file.Name) в $newname"
           Move-Item -Path $file.FullName -Destination "dist/$newname" -Force
-        shell: pwsh
+          echo "artifact_path=dist/$newname" >> $env:GITHUB_OUTPUT
+          echo "artifact_name=$newname" >> $env:GITHUB_OUTPUT
       
       - name: Upload to Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/FLauncher-${{ steps.version.outputs.VERSION }}_win64.exe
+          files: ${{ steps.artifact.outputs.artifact_path }}
           token: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Upload artifact
         if: github.event_name != 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: FLauncher-${{ steps.version.outputs.VERSION }}_win64
-          path: dist/FLauncher-${{ steps.version.outputs.VERSION }}_win64.exe
+          name: FLauncher_win64
+          path: ${{ steps.artifact.outputs.artifact_path }}
           if-no-files-found: error
 
   build-linux:
@@ -110,30 +81,8 @@ jobs:
       - name: Build
         run: pyinstaller build.spec
       
-      - name: Get version
-        id: version
-        run: |
-          if [[ "${{ github.event_name }}" == "release" ]]; then
-            VERSION="${{ github.event.release.tag_name }}"
-          else
-            VERSION="${{ github.event.inputs.version }}"
-          fi
-          
-          if [[ -z "$VERSION" ]]; then
-            echo "Версия не определена через event, парсим build.spec..."
-            VERSION=$(grep -o "VERSION = ['\"]*[^'\"]*['\"]*" build.spec | grep -o "['\"][^'\"]*['\"]" | tr -d "'\"")
-            if [[ -n "$VERSION" ]]; then
-              echo "Найдена версия в build.spec: $VERSION"
-            else
-              VERSION="unknown"
-              echo "Версия не найдена, используем 'unknown'"
-            fi
-          fi
-          
-          echo "Итоговая версия: $VERSION"
-          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
-      
       - name: Prepare binary
+        id: artifact
         run: |
           BINARY=$(find dist -name "FLauncher-*" -type f | head -1)
           if [ -z "$BINARY" ]; then
@@ -177,21 +126,23 @@ jobs:
             echo "Ошибка: AppImage не создан"
             exit 1
           fi
-          mv "$APPIMAGE_FILE" "FLauncher-${{ steps.version.outputs.VERSION }}_x86-64.AppImage"
+          mv "$APPIMAGE_FILE" "FLauncher_linux_x86-64.AppImage"
+          echo "artifact_path=FLauncher_linux_x86-64.AppImage" >> $GITHUB_OUTPUT
+          echo "artifact_name=FLauncher_linux_x86-64.AppImage" >> $GITHUB_OUTPUT
       
       - name: Upload to Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: FLauncher-${{ steps.version.outputs.VERSION }}_x86-64.AppImage
+          files: ${{ steps.artifact.outputs.artifact_path }}
           token: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Upload artifact
         if: github.event_name != 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: FLauncher-${{ steps.version.outputs.VERSION }}_x86-64
-          path: FLauncher-${{ steps.version.outputs.VERSION }}_x86-64.AppImage
+          name: FLauncher_linux_x86-64
+          path: ${{ steps.artifact.outputs.artifact_path }}
           if-no-files-found: error
 
   build-macos:
@@ -215,24 +166,8 @@ jobs:
       - name: Build
         run: pyinstaller build.spec
       
-      - name: Get version
-        id: version
-        run: |
-          if [[ "${{ github.event_name }}" == "release" ]]; then
-            VERSION="${{ github.event.release.tag_name }}"
-          else
-            VERSION="${{ github.event.inputs.version }}"
-          fi
-          
-          if [[ -z "$VERSION" ]]; then
-            VERSION="unknown"
-            echo "Версия не определена, используем 'unknown'"
-          fi
-          
-          echo "Итоговая версия: $VERSION"
-          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
-      
       - name: Create DMG
+        id: artifact
         run: |
           APP_BUNDLE=$(find dist -name "*.app" -type d | head -n 1)
           if [ -z "$APP_BUNDLE" ]; then
@@ -245,23 +180,26 @@ jobs:
           cp -r "$APP_BUNDLE" dmg_temp/
           ln -s /Applications dmg_temp/Applications
           
-          DMG_NAME="FLauncher-${{ steps.version.outputs.VERSION }}_macos.dmg"
-          hdiutil create -volname "FLauncher ${{ steps.version.outputs.VERSION }}" \
+          DMG_NAME="FLauncher_macos.dmg"
+          hdiutil create -volname "FLauncher" \
             -srcfolder dmg_temp \
             -ov -format UDZO \
             "$DMG_NAME"
+          
+          echo "artifact_path=$DMG_NAME" >> $GITHUB_OUTPUT
+          echo "artifact_name=$DMG_NAME" >> $GITHUB_OUTPUT
       
       - name: Upload to Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: FLauncher-${{ steps.version.outputs.VERSION }}_macos.dmg
+          files: ${{ steps.artifact.outputs.artifact_path }}
           token: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Upload artifact
         if: github.event_name != 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: FLauncher-${{ steps.version.outputs.VERSION }}_macos
-          path: FLauncher-${{ steps.version.outputs.VERSION }}_macos.dmg
+          name: FLauncher_macos
+          path: ${{ steps.artifact.outputs.artifact_path }}
           if-no-files-found: error
