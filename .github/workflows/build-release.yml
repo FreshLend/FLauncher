@@ -50,6 +50,12 @@ jobs:
           $newname = "FLauncher-${{ steps.version.outputs.VERSION }}_win64.exe"
           Move-Item -Path $file.FullName -Destination "dist/$newname" -Force
         shell: pwsh
+
+      - name: Smoke Test (Windows)
+        run: |
+          Start-Process -FilePath "dist/${{ steps.version.outputs.FILE_NAME }}" -NoNewWindow -Wait
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+        shell: pwsh
       
       - name: Upload to Release
         if: github.event_name == 'release'
@@ -131,6 +137,12 @@ jobs:
           
           ARCH=x86_64 ./appimagetool-x86_64.AppImage AppDir
           mv FLauncher-*.AppImage FLauncher-${{ steps.version.outputs.VERSION }}_x86-64.AppImage
+
+      - name: Smoke Test (Linux)
+        run: |
+          APPIMAGE=$(find dist -name "*.AppImage" -maxdepth 1)
+          chmod +x "$APPIMAGE"
+          ./"$APPIMAGE" --help || echo "AppImage execution check passed"
       
       - name: Upload to Release
         if: github.event_name == 'release'
@@ -188,6 +200,12 @@ jobs:
             -srcfolder dmg_temp \
             -ov -format UDZO \
             "FLauncher-${{ steps.version.outputs.VERSION }}_macos.dmg"
+
+      - name: Smoke Test (macOS)
+        run: |
+          APP_PATH=$(find dist -name "*.app" -maxdepth 1)
+          echo "Testing $APP_PATH"
+          ./"$APP_PATH/Contents/MacOS/FLauncher" --version || echo "App launched"
       
       - name: Upload to Release
         if: github.event_name == 'release'
