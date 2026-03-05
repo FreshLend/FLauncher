@@ -22,4 +22,4 @@
 > pip install pyinstaller  
 > pyinstaller build.spec
 
-[[Скачать FLauncher]]([https://drive.google.com/file/d/1H9M1bupWB_pGmeGQVHFAFgWGAv-BRu-z/view](https://github.com/FreshLend/FLauncher/releases))
+[[Скачать FLauncher]](https://github.com/FreshLend/FLauncher/releases)
