@@ -25,7 +25,7 @@ class UIComponents:
         self.reload_button = None
         self.folder_button = None
         self.settings_button = None
-        self.blue_bar = None
+        self.bar = None
         
         self.release_panel = None
         self.release_layout = None
@@ -45,7 +45,7 @@ class UIComponents:
     
     def setup_all(self):
         self.set_background()
-        self.add_blue_bar()
+        self.add_bar()
         self.add_release_panel()
         self.add_info_panel()
         self.add_settings_panel()
@@ -59,12 +59,12 @@ class UIComponents:
         palette.setBrush(QPalette.Background, brush)
         self.main.setPalette(palette)
     
-    def add_blue_bar(self):
-        self.blue_bar = QWidget(self.main)
-        self.blue_bar.setGeometry(0, self.main.height() - 90, self.main.width(), 90)
-        self.blue_bar.setStyleSheet("background-color: rgba(113, 169, 76, 0.9);")
+    def add_bar(self):
+        self.bar = QWidget(self.main)
+        self.bar.setGeometry(0, self.main.height() - 90, self.main.width(), 90)
+        self.bar.setStyleSheet("background-color: rgba(113, 169, 76, 0.9);")
         
-        self.input_field = QLineEdit(self.blue_bar)
+        self.input_field = QLineEdit(self.bar)
         self.input_field.setGeometry(10, 20, 200, 60)
         self.input_field.setStyleSheet("""
             background-color: white; 
@@ -77,7 +77,7 @@ class UIComponents:
         self.input_field.setPlaceholderText("Введите ник...")
         self.input_field.textChanged.connect(self.main.on_text_changed)
         
-        self.version_combo = QComboBox(self.blue_bar)
+        self.version_combo = QComboBox(self.bar)
         self.version_combo.setGeometry(220, 20, 300, 60)
         self.version_combo.setStyleSheet("""
             QComboBox {
@@ -114,7 +114,7 @@ class UIComponents:
         """)
         self.version_combo.currentIndexChanged.connect(self.main.on_version_changed)
         
-        self.progress_bar = QProgressBar(self.blue_bar)
+        self.progress_bar = QProgressBar(self.bar)
         self.progress_bar.setGeometry(10, 0, self.main.width() - 20, 20)
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
@@ -131,13 +131,13 @@ class UIComponents:
             }
         """)
         
-        self.download_info_label = QLabel(self.blue_bar)
+        self.download_info_label = QLabel(self.bar)
         self.download_info_label.setGeometry(10, 0, self.main.width() - 20, 20)
         self.download_info_label.setStyleSheet("font-size: 12px; color: black;")
         self.download_info_label.setAlignment(Qt.AlignCenter)
         self.download_info_label.setText("")
         
-        self.play_button = QPushButton("Войти в игру", self.blue_bar)
+        self.play_button = QPushButton("Войти в игру", self.bar)
         self.play_button.setGeometry(530, 20, 300, 60)
         self.play_button.setStyleSheet("""
             QPushButton {
@@ -157,7 +157,7 @@ class UIComponents:
         self.play_button.clicked.connect(self.main.on_play_button_click)
         
         icon_flm = QIcon(resource_path("ui/FLM.png"))
-        self.flm_button = QPushButton(self.blue_bar)
+        self.flm_button = QPushButton(self.bar)
         self.flm_button.setIcon(icon_flm)
         self.flm_button.setIconSize(QSize(60, 60))
         self.flm_button.setGeometry(835, 20, 60, 60)
@@ -176,7 +176,7 @@ class UIComponents:
         self.flm_button.clicked.connect(self.main.on_flm_button_click)
         
         icon_reload = QIcon(resource_path("ui/reload.png"))
-        self.reload_button = QPushButton(self.blue_bar)
+        self.reload_button = QPushButton(self.bar)
         self.reload_button.setIcon(icon_reload)
         self.reload_button.setIconSize(QSize(30, 30))
         self.reload_button.setGeometry(895, 20, 60, 60)
@@ -195,7 +195,7 @@ class UIComponents:
         self.reload_button.clicked.connect(self.main.refresh_versions)
         
         icon_folder = QIcon(resource_path("ui/folder.png"))
-        self.folder_button = QPushButton(self.blue_bar)
+        self.folder_button = QPushButton(self.bar)
         self.folder_button.setIcon(icon_folder)
         self.folder_button.setIconSize(QSize(30, 30))
         self.folder_button.setGeometry(965, 20, 60, 60)
@@ -214,7 +214,7 @@ class UIComponents:
         self.folder_button.clicked.connect(self.main.open_versions_folder)
         
         icon_settings = QIcon(resource_path("ui/settings.png"))
-        self.settings_button = QPushButton(self.blue_bar)
+        self.settings_button = QPushButton(self.bar)
         self.settings_button.setIcon(icon_settings)
         self.settings_button.setIconSize(QSize(30, 30))
         self.settings_button.setGeometry(1035, 20, 60, 60)
@@ -234,19 +234,20 @@ class UIComponents:
     
     def add_release_panel(self):
         self.release_panel = QWidget(self.main)
-        self.release_panel.setGeometry(20, 40, 700, self.main.height() - 130)
+        self.release_panel.setGeometry(20, 10, 700, self.main.height() - 110)
         self.release_panel.setStyleSheet("""
-            background-color: rgba(255, 255, 255, 0.7);
-            border-radius: 10px;
+            background-color: rgba(255, 255, 255, 0.55);
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.25);
         """)
         
         self.release_layout = QVBoxLayout(self.release_panel)
-        self.release_layout.setContentsMargins(15, 15, 15, 15)
+        self.release_layout.setContentsMargins(20, 20, 20, 20)
         self.release_layout.setSpacing(15)
         
         self.scroll_area = QScrollArea(self.main)
         self.scroll_area.setWidget(self.release_panel)
-        self.scroll_area.setGeometry(20, 40, 800, self.main.height() - 130)
+        self.scroll_area.setGeometry(20, 10, 800, self.main.height() - 110)
         self.scroll_area.setWidgetResizable(True)
         
         self.release_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -254,17 +255,22 @@ class UIComponents:
         self.scroll_area.setStyleSheet("""
             QScrollArea {
                 border: none;
+                background: transparent;
             }
             QScrollBar:vertical {
                 border: none;
-                background: rgba(200, 200, 200, 0.5);
-                width: 10px;
+                background: rgba(200, 200, 200, 0.35);
+                width: 8px;
                 margin: 0px 0px 0px 0px;
+                border-radius: 4px;
             }
             QScrollBar::handle:vertical {
                 background: rgba(100, 100, 100, 0.5);
                 min-height: 20px;
-                border-radius: 5px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: rgba(100, 100, 100, 0.7);
             }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
                 height: 0px;
@@ -272,24 +278,25 @@ class UIComponents:
         """)
         
         self.get_github_releases()
-    
+
     def add_info_panel(self):
         info_panel = QWidget(self.main)
-        info_panel.setGeometry(830, 0, 250, self.main.height() - 90)
+        info_panel.setGeometry(830, 10, 250, self.main.height() - 110)
         info_panel.setStyleSheet("""
-            background-color: rgba(90, 171, 215, 0.9);
-            border-top-right-radius: 10px;
+            background-color: rgba(90, 171, 215, 0.5);
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
         """)
         
         info_layout = QVBoxLayout(info_panel)
-        info_layout.setContentsMargins(10, 10, 10, 10)
+        info_layout.setContentsMargins(15, 20, 15, 20)
         info_layout.setSpacing(15)
         
         title_label = QLabel('FLAUNCHER')
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setStyleSheet("""
-            font-size: 30px; 
-            font-weight: bold; 
+            font-size: 32px;
+            font-weight: bold;
             color: white;
             margin-bottom: 5px;
         """)
@@ -298,27 +305,28 @@ class UIComponents:
         subtitle_label = QLabel('ЛАУНЧЕР ДЛЯ VOXELCORE')
         subtitle_label.setAlignment(Qt.AlignCenter)
         subtitle_label.setStyleSheet("""
-            font-size: 16px; 
-            font-weight: normal; 
+            font-size: 16px;
+            font-weight: normal;
             color: white;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
         """)
         info_layout.addWidget(subtitle_label)
         
         button_style = """
             QPushButton {
-                background-color: rgb(62, 148, 182); 
-                font-size: 18px; 
-                color: white; 
+                background-color: rgba(62, 148, 182, 0.85);
+                font-size: 18px;
+                color: white;
                 padding: 10px;
-                border-radius: 5px;
-                border: none;
+                border-radius: 8px;
+                border: 1px solid rgba(255, 255, 255, 0.3);
             }
             QPushButton:hover {
-                background-color: rgb(72, 158, 192);
+                background-color: rgba(72, 158, 192, 0.95);
+                border: 1px solid rgba(255, 255, 255, 0.5);
             }
             QPushButton:pressed {
-                background-color: rgb(52, 138, 172);
+                background-color: rgba(52, 138, 172, 1.0);
             }
         """
         
@@ -338,9 +346,12 @@ class UIComponents:
         version_label = QLabel(f'Версия: {VERSION}')
         version_label.setAlignment(Qt.AlignCenter)
         version_label.setStyleSheet("""
-            font-size: 14px; 
+            font-size: 14px;
             color: white;
-            margin-top: 20px;
+            margin-top: 25px;
+            padding: 5px;
+            background-color: rgba(0, 0, 0, 0.25);
+            border-radius: 5px;
         """)
         info_layout.addWidget(version_label)
         
@@ -469,7 +480,7 @@ class UIComponents:
                 border: 1px solid #0086c7;
             }
         """)
-        self.additional_args_input.setPlaceholderText("Аргументы:")
+        self.additional_args_input.setPlaceholderText("Аргументы: --headless")
         launch_params_layout.addWidget(self.additional_args_input)
         
         launch_layout.addWidget(launch_params_group)
@@ -620,7 +631,7 @@ class UIComponents:
         self.FL_MODS_background.hide()
         
         self.FL_MODS = QWidget(self.main)
-        self.FL_MODS.setGeometry(150, 30, 800, self.main.height() - 120)
+        self.FL_MODS.setGeometry(50, 30, 1000, self.main.height() - 120)
         self.FL_MODS.setStyleSheet("""
             background-color: white;
             border-radius: 10px;
@@ -846,7 +857,8 @@ class UIComponents:
                     if release_date_str:
                         try:
                             release_date = datetime.strptime(release_date_str, '%Y-%m-%dT%H:%M:%SZ')
-                            release_date_formatted = release_date.strftime('%d %B %Y')
+                            from utils import format_date
+                            release_date_formatted = format_date(release_date_str)
                         except ValueError:
                             release_date_formatted = "Дата неизвестна"
                     

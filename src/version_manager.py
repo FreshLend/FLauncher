@@ -1,13 +1,19 @@
 import re
 import json
 import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from PyQt5.QtCore import QObject, pyqtSignal
 
 from utils import MAX_LOAD, MAIN_REPO, get_platform_asset_pattern
 
 
-class VersionManager:
+class VersionManager(QObject):
+    error_occurred = pyqtSignal(str)
+    versions_loaded = pyqtSignal()
+    
     def __init__(self, settings_manager):
+        super().__init__()
         self.settings_manager = settings_manager
         self.app_data_path = settings_manager.app_data_path
         self.asset_pattern = get_platform_asset_pattern()
@@ -20,44 +26,62 @@ class VersionManager:
                 headers={'Accept': 'application/vnd.github.v3+json'}
             )
             
-            releases = response.json()
-            valid_versions = []
+            if response.status_code != 200:
+                error_msg = f"Репозиторий {repo} вернул код {response.status_code}"
+                self.error_occurred.emit(error_msg)
+                return []
             
+            releases = response.json()
+            if not isinstance(releases, list):
+                self.error_occurred.emit(f"Неверный формат ответа от {repo}")
+                return []
+            
+            valid_versions = []
             for release in releases:
                 if not isinstance(release, dict) or 'tag_name' not in release:
                     continue
                 
                 assets = release.get('assets', [])
-                has_platform_asset = False
-                
-                for asset in assets:
-                    asset_name = asset.get('name', '')
-                    if self.asset_pattern in asset_name:
-                        has_platform_asset = True
-                        break
+                has_platform_asset = any(
+                    self.asset_pattern in asset.get('name', '') 
+                    for asset in assets
+                )
                 
                 if has_platform_asset:
                     valid_versions.append((release['tag_name'], repo))
             
             return valid_versions
             
+        except requests.exceptions.Timeout:
+            self.error_occurred.emit(f"Таймаут при подключении к {repo}")
+            return []
+        except requests.exceptions.ConnectionError:
+            self.error_occurred.emit(f"Ошибка подключения к {repo}. Проверьте интернет.")
+            return []
         except Exception as e:
-            print(f"Ошибка получения версий из {repo}: {e}")
+            self.error_occurred.emit(f"Ошибка получения версий из {repo}: {str(e)}")
             return []
     
     def get_all_online_versions(self):
         all_versions = []
+        repos_to_check = [MAIN_REPO] + self.settings_manager.settings.get("github_repos", [])
         
-        main_versions = self.get_github_repo_versions(MAIN_REPO)
-        all_versions.extend([v[0] for v in main_versions])
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            # Запускаем все задачи
+            future_to_repo = {
+                executor.submit(self.get_github_repo_versions, repo): repo 
+                for repo in repos_to_check
+            }
+            
+            for future in as_completed(future_to_repo):
+                repo = future_to_repo[future]
+                try:
+                    repo_versions = future.result(timeout=10)
+                    all_versions.extend([v[0] for v in repo_versions])
+                except Exception as e:
+                    self.error_occurred.emit(f"Не удалось обработать {repo}: {str(e)}")
         
-        for repo in self.settings_manager.settings.get("github_repos", []):
-            try:
-                repo_versions = self.get_github_repo_versions(repo)
-                all_versions.extend([v[0] for v in repo_versions])
-            except Exception as e:
-                print(f"Ошибка загрузки {repo}: {e}")
-        
+        self.versions_loaded.emit()
         return all_versions
     
     def get_user_versions(self):
@@ -73,7 +97,7 @@ class VersionManager:
     
     def _version_to_tuple(self, version_str):
         version_parts = re.findall(r'\d+', version_str)
-        return tuple(map(int, version_parts))
+        return tuple(map(int, version_parts)) if version_parts else (0,)
     
     def find_repo_for_version(self, version_tag):
         if self._is_version_in_repo(version_tag, MAIN_REPO):
@@ -87,10 +111,13 @@ class VersionManager:
     
     def _is_version_in_repo(self, version_tag, repo):
         try:
-            versions = self.get_github_repo_versions(repo)
-            return any(v[0] == version_tag for v in versions)
+            response = requests.get(
+                f"https://api.github.com/repos/{repo}/releases/tags/{version_tag}",
+                timeout=3
+            )
+            return response.status_code == 200
         except Exception as e:
-            print(f"Ошибка при проверке версии в репозитории {repo}: {e}")
+            self.error_occurred.emit(f"Ошибка при проверке {version_tag} в {repo}: {str(e)}")
             return False
     
     def get_username_from_config(self, version):
@@ -103,8 +130,10 @@ class VersionManager:
                 config = json.load(f)
                 if "Account" in config and "name" in config["Account"]:
                     return config["Account"]["name"]
+        except json.JSONDecodeError:
+            self.error_occurred.emit(f"Ошибка чтения JSON в {config_file_path}")
         except Exception as e:
-            print(f"Ошибка при чтении файла config.json: {e}")
+            self.error_occurred.emit(f"Ошибка при чтении config.json: {e}")
         
         return None
     
@@ -126,7 +155,7 @@ class VersionManager:
             with open(config_file_path, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=4)
         except Exception as e:
-            print(f"Ошибка при обновлении файла config.json: {e}")
+            self.error_occurred.emit(f"Ошибка при обновлении config.json: {e}")
     
     def create_config_json(self, extraction_path):
         try:
@@ -143,4 +172,4 @@ class VersionManager:
                 with open(config_path, 'w', encoding='utf-8') as config_file:
                     json.dump(config_content, config_file, indent=4)
         except Exception as e:
-            print(f"Не удалось создать config.json: {e}")
+            self.error_occurred.emit(f"Не удалось создать config.json: {e}")

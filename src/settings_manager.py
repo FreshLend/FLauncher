@@ -5,42 +5,42 @@ from pathlib import Path
 
 class SettingsManager:
     def __init__(self):
+        self.system = sys.platform
         self.app_data_path = self._get_app_data_path()
         self.settings_path = self._get_settings_path()
-        self.downloads_path = self.app_data_path.parent / "downloads"
+        self.downloads_path = self._get_downloads_path()
         
         self._create_directories()
         self.settings = self._load_settings()
     
     def _get_app_data_path(self):
-        system = sys.platform
-        
-        if system == 'win32':
+        if self.system == 'win32':
             base_path = Path(os.environ.get('APPDATA', ''))
             if not base_path:
                 base_path = Path.home() / 'AppData' / 'Roaming'
             return base_path / 'com.flauncher.app' / 'FLauncher' / 'VC' / 'versions'
         
-        elif system == 'darwin':
+        elif self.system == 'darwin':
             return Path.home() / 'Library' / 'Application Support' / 'com.flauncher.app' / 'FLauncher' / 'VC' / 'versions'
         
         else:
             return Path.home() / '.local' / 'share' / 'com.flauncher.app' / 'FLauncher' / 'VC' / 'versions'
     
     def _get_settings_path(self):
-        system = sys.platform
-        
-        if system == 'win32':
+        if self.system == 'win32':
             base_path = Path(os.environ.get('APPDATA', ''))
             if not base_path:
                 base_path = Path.home() / 'AppData' / 'Roaming'
             return base_path / 'com.flauncher.app' / 'FLauncher' / 'settings.json'
         
-        elif system == 'darwin':
+        elif self.system == 'darwin':
             return Path.home() / 'Library' / 'Application Support' / 'com.flauncher.app' / 'FLauncher' / 'settings.json'
         
         else:
             return Path.home() / '.config' / 'com.flauncher.app' / 'FLauncher' / 'settings.json'
+    
+    def _get_downloads_path(self):
+        return self.app_data_path.parent / "downloads"
     
     def _create_directories(self):
         self.app_data_path.mkdir(parents=True, exist_ok=True)
