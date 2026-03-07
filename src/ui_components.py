@@ -951,7 +951,6 @@ class UIComponents(QObject):
         
         token_description = QLabel(
             'Токен для доступа к GitHub API. Нужен для увеличения лимита запросов.\n'
-            'По умолчанию используется публичный токен. Вы можете использовать свой.\n'
             'Создать токен: Settings → Developer settings → Personal access tokens'
         )
         token_description.setStyleSheet("""
