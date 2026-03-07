@@ -53,18 +53,27 @@ class SettingsManager:
             "discord_rpc_enabled": True,
             "launch_params": {
                 "additional_args": ""
-            }
+            },
+            "artifacts": {
+                "enabled": False,
+                "max_count": 1,
+                "windows": {
+                    "msvc": False,
+                    "clang": True
+                }
+            },
+            "github_token": "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"
         }
         
-        if not self.settings_path.exists():
-            self._save_settings(default_settings)
-            return default_settings
+        if self.settings_path.exists():
+            try:
+                with open(self.settings_path, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+                    default_settings.update(settings)
+            except (FileNotFoundError, json.JSONDecodeError):
+                pass
         
-        try:
-            with open(self.settings_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            return default_settings
+        return default_settings
     
     def _save_settings(self, settings=None):
         if settings is None:
@@ -95,3 +104,23 @@ class SettingsManager:
     def update_launch_params(self, additional_args):
         self.settings["launch_params"]["additional_args"] = additional_args
         self._save_settings()
+    
+    def set_artifacts_enabled(self, enabled):
+        self.settings["artifacts"]["enabled"] = enabled
+        self._save_settings()
+    
+    def set_artifacts_max_count(self, count):
+        self.settings["artifacts"]["max_count"] = count
+        self._save_settings()
+    
+    def set_windows_artifact_visible(self, build_type, visible):
+        if build_type in ["msvc", "clang"]:
+            self.settings["artifacts"]["windows"][build_type] = visible
+            self._save_settings()
+    
+    def set_github_token(self, token):
+        self.settings["github_token"] = token
+        self._save_settings()
+    
+    def get_github_token(self):
+        return self.settings.get("github_token", "")

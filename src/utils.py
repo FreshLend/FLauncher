@@ -1,7 +1,7 @@
 import os
 import sys
 
-VERSION = "v0.5.0"
+VERSION = "v0.6.0"
 MAIN_REPO = "MihailRis/voxelcore"
 MAX_LOAD = 1000
 
