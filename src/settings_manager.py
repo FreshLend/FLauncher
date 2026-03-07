@@ -62,7 +62,7 @@ class SettingsManager:
                     "clang": True
                 }
             },
-            "github_token": "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"
+            "github_token": ""
         }
         
         if self.settings_path.exists():
