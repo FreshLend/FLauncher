@@ -1,13 +1,12 @@
 from datetime import datetime
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QScrollArea, QLabel, QFrame, QPushButton, 
     QComboBox, QTabWidget, QHBoxLayout, QProgressBar, QTextBrowser, 
     QLineEdit, QSizePolicy, QSpinBox, QCheckBox
 )
-from PyQt5.QtGui import QPalette, QBrush, QImage, QIcon, QDesktopServices
-from PyQt5.QtCore import Qt, QSize, QUrl, QObject, pyqtSignal
+from PyQt6.QtGui import QPalette, QBrush, QImage, QIcon, QDesktopServices
+from PyQt6.QtCore import Qt, QSize, QUrl, QObject, pyqtSignal
 from utils import resource_path, MAIN_REPO, VERSION
-from github_client import GitHubClient
 
 class ReleaseDisplayWidget(QWidget):
     def __init__(self, release_data, parent=None):
@@ -58,8 +57,8 @@ class ReleaseDisplayWidget(QWidget):
             layout.addWidget(release_info_label)
         
         separator = QFrame()
-        separator.setFrameShape(QFrame.HLine)
-        separator.setFrameShadow(QFrame.Sunken)
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
         separator.setStyleSheet("""
             background-color: rgba(0, 0, 0, 0.2); 
             height: 1px;
@@ -144,7 +143,7 @@ class UIComponents(QObject):
         palette = self.main.palette()
         image = QImage(resource_path('ui/background.png'))
         brush = QBrush(image)
-        palette.setBrush(QPalette.Background, brush)
+        palette.setBrush(QPalette.ColorRole.Window, brush)
         self.main.setPalette(palette)
     
     def add_bar(self):
@@ -224,7 +223,7 @@ class UIComponents(QObject):
         self.download_info_label = QLabel(self.bar)
         self.download_info_label.setGeometry(10, 0, self.main.width() - 20, 20)
         self.download_info_label.setStyleSheet("font-size: 12px; color: black;")
-        self.download_info_label.setAlignment(Qt.AlignCenter)
+        self.download_info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.download_info_label.setText("")
         
         self.cancel_button = QPushButton("Отмена", self.bar)
@@ -360,7 +359,7 @@ class UIComponents(QObject):
         self.scroll_area.setGeometry(20, 10, 800, self.main.height() - 110)
         self.scroll_area.setWidgetResizable(True)
         
-        self.release_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.release_panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         
         self.scroll_area.setStyleSheet("""
             QScrollArea {
@@ -505,7 +504,7 @@ class UIComponents(QObject):
         info_layout.setSpacing(15)
         
         title_label = QLabel('FLAUNCHER')
-        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title_label.setStyleSheet("""
             font-size: 32px;
             font-weight: bold;
@@ -515,7 +514,7 @@ class UIComponents(QObject):
         info_layout.addWidget(title_label)
         
         subtitle_label = QLabel('ЛАУНЧЕР ДЛЯ VOXELCORE')
-        subtitle_label.setAlignment(Qt.AlignCenter)
+        subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         subtitle_label.setStyleSheet("""
             font-size: 16px;
             font-weight: normal;
@@ -555,7 +554,7 @@ class UIComponents(QObject):
         info_layout.addWidget(button_freshlend)
         
         version_label = QLabel(f'Версия: {VERSION}')
-        version_label.setAlignment(Qt.AlignCenter)
+        version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         version_label.setStyleSheet("""
             font-size: 14px;
             color: white;
@@ -590,7 +589,7 @@ class UIComponents(QObject):
         blue_layout.setContentsMargins(20, 0, 20, 0)
         
         settings_label = QLabel('Настройки')
-        settings_label.setAlignment(Qt.AlignCenter)
+        settings_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         settings_label.setStyleSheet("""
             font-size: 20px;
             font-weight: bold;
@@ -619,7 +618,7 @@ class UIComponents(QObject):
         self.tab_widget = QTabWidget(self.settings_panel)
         self.tab_widget.setGeometry(10, 60, self.settings_panel.width() - 20, self.settings_panel.height() - 70)
         
-        self.tab_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.tab_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         
         self.tab_widget.setStyleSheet("""
             QTabWidget::pane {
@@ -707,7 +706,7 @@ class UIComponents(QObject):
         
         artifacts_scroll = QScrollArea()
         artifacts_scroll.setWidgetResizable(True)
-        artifacts_scroll.setFrameShape(QFrame.NoFrame)
+        artifacts_scroll.setFrameShape(QFrame.Shape.NoFrame)
         artifacts_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         
         artifacts_content = QWidget()
@@ -742,7 +741,7 @@ class UIComponents(QObject):
         self.artifacts_toggle.clicked.connect(lambda: self.artifacts_toggled.emit(
             not self.settings_manager.settings["artifacts"]["enabled"]
         ))
-        artifacts_enable_layout.addWidget(self.artifacts_toggle, alignment=Qt.AlignCenter)
+        artifacts_enable_layout.addWidget(self.artifacts_toggle, alignment=Qt.AlignmentFlag.AlignCenter)
         
         artifacts_layout.addWidget(artifacts_enable_group)
         
@@ -816,7 +815,7 @@ class UIComponents(QObject):
                 }
             """)
             self.msvc_checkbox.stateChanged.connect(
-                lambda state: self.windows_build_type_changed.emit('msvc', state == Qt.Checked)
+                lambda state: self.windows_build_type_changed.emit('msvc', state == Qt.CheckState.Checked.value)
             )
             checkboxes_layout.addWidget(self.msvc_checkbox)
             
@@ -833,7 +832,7 @@ class UIComponents(QObject):
                 }
             """)
             self.clang_checkbox.stateChanged.connect(
-                lambda state: self.windows_build_type_changed.emit('clang', state == Qt.Checked)
+                lambda state: self.windows_build_type_changed.emit('clang', state == Qt.CheckState.Checked.value)
             )
             checkboxes_layout.addWidget(self.clang_checkbox)
             checkboxes_layout.addStretch()
@@ -855,7 +854,7 @@ class UIComponents(QObject):
         flauncher_tab = QWidget()
         flauncher_scroll = QScrollArea()
         flauncher_scroll.setWidgetResizable(True)
-        flauncher_scroll.setFrameShape(QFrame.NoFrame)
+        flauncher_scroll.setFrameShape(QFrame.Shape.NoFrame)
         flauncher_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         
         flauncher_content = QWidget()
@@ -902,7 +901,7 @@ class UIComponents(QObject):
         """)
         add_repo_button.setFixedHeight(40)
         add_repo_button.clicked.connect(self.add_repo_clicked)
-        github_layout.addWidget(add_repo_button, alignment=Qt.AlignCenter)
+        github_layout.addWidget(add_repo_button, alignment=Qt.AlignmentFlag.AlignCenter)
         
         repos_label = QLabel('Добавленные репозитории:')
         repos_label.setStyleSheet("font-size: 14px; color: #333; font-weight: bold; margin-top: 10px;")
@@ -965,7 +964,7 @@ class UIComponents(QObject):
         github_token_layout.addWidget(token_description)
         
         self.github_token_input = QLineEdit()
-        self.github_token_input.setEchoMode(QLineEdit.Password)
+        self.github_token_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.github_token_input.textChanged.connect(self.github_token_changed)
         self.github_token_input.setStyleSheet("""
             QLineEdit {
@@ -1084,7 +1083,7 @@ class UIComponents(QObject):
         self.discord_toggle.clicked.connect(
             lambda: self.discord_toggled.emit(not self.settings_manager.settings.get("discord_rpc_enabled", True))
         )
-        discord_layout.addWidget(self.discord_toggle, alignment=Qt.AlignCenter)
+        discord_layout.addWidget(self.discord_toggle, alignment=Qt.AlignmentFlag.AlignCenter)
         
         privacy_layout.addWidget(discord_group)
         privacy_layout.addStretch(1)
@@ -1146,7 +1145,7 @@ class UIComponents(QObject):
         blue_layout.setContentsMargins(20, 0, 20, 0)
         
         flmods_label = QLabel('FLMODS')
-        flmods_label.setAlignment(Qt.AlignCenter)
+        flmods_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         flmods_label.setStyleSheet("""
             font-size: 20px; 
             font-weight: bold; 
@@ -1177,7 +1176,7 @@ class UIComponents(QObject):
         layout.setSpacing(20)
         
         text_browser = QTextBrowser()
-        text_browser.setAlignment(Qt.AlignTop)
+        text_browser.setAlignment(Qt.AlignmentFlag.AlignTop)
         text_browser.setStyleSheet("""
             QTextBrowser {
                 background-color: white;

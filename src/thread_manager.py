@@ -1,6 +1,6 @@
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from PyQt5.QtCore import QObject, pyqtSignal, QThread
+from PyQt6.QtCore import QObject, pyqtSignal
 
 class ThreadManager(QObject):
     thread_status = pyqtSignal(str)

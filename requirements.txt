@@ -1,4 +1,4 @@
 markdown
 pypresence
-PyQt5
+PyQt6
 requests

@@ -1,8 +1,6 @@
-import sys
-from pathlib import Path
-from PyQt5.QtWidgets import QMainWindow, QMessageBox, QApplication, QInputDialog
-from PyQt5.QtGui import QIcon, QDesktopServices
-from PyQt5.QtCore import QUrl, pyqtSlot, pyqtSignal, QTimer
+from PyQt6.QtWidgets import QMainWindow, QMessageBox, QInputDialog
+from PyQt6.QtGui import QIcon, QDesktopServices
+from PyQt6.QtCore import QUrl, pyqtSlot, pyqtSignal, QTimer
 from ui_components import UIComponents
 from discord_rpc import DiscordRPC
 from version_manager import VersionManager
@@ -188,10 +186,10 @@ class FLauncher(QMainWindow):
             reply = QMessageBox.question(
                 self, 'Версия не найдена',
                 f'Версия {selected_version} не установлена. Хотите скачать её сейчас?',
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes
             )
             
-            if reply == QMessageBox.Yes:
+            if reply == QMessageBox.StandardButton.Yes:
                 self.download_version(selected_version)
             return
         
@@ -278,10 +276,10 @@ class FLauncher(QMainWindow):
             reply = QMessageBox.question(
                 self, 'Отмена загрузки',
                 'Вы действительно хотите отменить загрузку?',
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No
             )
             
-            if reply == QMessageBox.Yes:
+            if reply == QMessageBox.StandardButton.Yes:
                 self.download_worker.cancel()
                 self.ui.download_info_label.setText("Отмена загрузки...")
                 self.ui.cancel_button.setEnabled(False)
@@ -354,17 +352,17 @@ class FLauncher(QMainWindow):
     
     def show_error_message(self, title, message):
         msg = QMessageBox()
-        msg.setIcon(QMessageBox.Critical)
+        msg.setIcon(QMessageBox.Icon.Critical)
         msg.setWindowTitle(title)
         msg.setText(message)
-        msg.exec_()
+        msg.exec()
     
     def show_info_message(self, title, message):
         msg = QMessageBox()
-        msg.setIcon(QMessageBox.Information)
+        msg.setIcon(QMessageBox.Icon.Information)
         msg.setWindowTitle(title)
         msg.setText(message)
-        msg.exec_()
+        msg.exec()
 
     @pyqtSlot()
     def on_repo_added(self):
@@ -401,10 +399,10 @@ class FLauncher(QMainWindow):
                 reply = QMessageBox.question(
                     self, 'Обновить релизы?',
                     'Токен успешно проверен. Хотите обновить список релизов сейчас?',
-                    QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes
                 )
                 
-                if reply == QMessageBox.Yes:
+                if reply == QMessageBox.StandardButton.Yes:
                     self.refresh_releases_panel()
             else:
                 self.ui.update_token_status(

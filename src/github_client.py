@@ -1,7 +1,6 @@
 import requests
 import markdown
-from datetime import datetime
-from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt6.QtCore import QObject, pyqtSignal
 from utils import MAIN_REPO, format_date, get_platform_asset_pattern
 
 class GitHubClient(QObject):

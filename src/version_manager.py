@@ -3,7 +3,7 @@ import json
 from concurrent.futures import as_completed
 from pathlib import Path
 from datetime import datetime
-from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt6.QtCore import QObject, pyqtSignal
 from utils import MAX_LOAD, MAIN_REPO, get_platform_asset_pattern
 from github_client import GitHubClient
 
