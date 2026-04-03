@@ -1,4 +1,3 @@
-from datetime import datetime
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QScrollArea, QLabel, QFrame, QPushButton, 
     QComboBox, QTabWidget, QHBoxLayout, QProgressBar, QTextBrowser, 
