@@ -1,4 +1,5 @@
 import os
+import json
 import shutil
 import time
 import queue
@@ -9,7 +10,7 @@ from datetime import datetime, timezone
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, QComboBox,
-    QLabel, QFrame, QScrollArea
+    QLabel, QFrame, QScrollArea, QCheckBox
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QPixmap, QFont
@@ -59,6 +60,26 @@ def format_relative_time(iso_str):
         return "только что"
     except Exception:
         return iso_str
+
+
+def _normalize_version_str(v):
+    if v is None:
+        return ""
+    s = str(v).strip().lower()
+    if s.startswith('v'):
+        s = s[1:]
+    return s
+
+
+def _is_valid_version(v):
+    if v is None:
+        return False
+    s = _normalize_version_str(v)
+    if not s:
+        return False
+    if s in ("неизвестно", "загрузка...", "неизвестно"):
+        return False
+    return True
 
 
 class VoxelWorldAPI:
@@ -343,6 +364,295 @@ class VersionDownloaderThread(QThread):
         self.wait(3000)
 
 
+class InstalledSidebar(QWidget):
+    def __init__(self, settings_manager, parent=None):
+        super().__init__(parent)
+        self.settings_manager = settings_manager
+        self.version_folder = None
+        self.setFixedWidth(260)
+        self.setStyleSheet("background-color: #ffffff; border-right: 1px solid #e0e0e0;")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
+
+        title = QLabel("Установлено")
+        title.setStyleSheet("""
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+            background: transparent;
+            border: none;
+        """)
+        layout.addWidget(title)
+
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.scroll.setStyleSheet("""
+            QScrollArea { border: none; background: transparent; }
+            QScrollBar:vertical {
+                border: none;
+                background: #f0f0f0;
+                width: 8px;
+                margin: 0px;
+            }
+            QScrollBar::handle:vertical {
+                background: #c0c0c0;
+                min-height: 20px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #a0a0a0;
+            }
+        """)
+
+        self.items_container = QWidget()
+        self.items_container.setStyleSheet("background: transparent;")
+        self.items_layout = QVBoxLayout(self.items_container)
+        self.items_layout.setContentsMargins(0, 0, 0, 0)
+        self.items_layout.setSpacing(4)
+        self.items_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.scroll.setWidget(self.items_container)
+
+        layout.addWidget(self.scroll, 1)
+
+        self.refresh()
+
+    def set_version(self, version_folder):
+        self.version_folder = version_folder
+        self.refresh()
+
+    def refresh(self):
+        while self.items_layout.count():
+            item = self.items_layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+
+        if not self.version_folder:
+            self._show_empty()
+            return
+
+        try:
+            content_folder = Path(str(self.version_folder)) / "content"
+            disabled_folder = content_folder / "disabled"
+        except Exception:
+            self._show_empty()
+            return
+
+        enabled_items = []
+        disabled_items = []
+
+        if content_folder.exists():
+            try:
+                for d in content_folder.iterdir():
+                    if d.is_dir() and d.name != "disabled":
+                        enabled_items.append(d)
+            except Exception:
+                pass
+
+        if disabled_folder.exists():
+            try:
+                for d in disabled_folder.iterdir():
+                    if d.is_dir():
+                        disabled_items.append(d)
+            except Exception:
+                pass
+
+        if not enabled_items and not disabled_items:
+            self._show_empty()
+            return
+
+        enabled_items.sort(key=lambda p: p.name.lower())
+        disabled_items.sort(key=lambda p: p.name.lower())
+
+        for folder in enabled_items:
+            self.items_layout.addWidget(self._create_item(folder, enabled=True))
+
+        for folder in disabled_items:
+            self.items_layout.addWidget(self._create_item(folder, enabled=False))
+
+    def _show_empty(self):
+        empty = QLabel("Ничего не установлено")
+        empty.setStyleSheet("""
+            font-size: 12px;
+            color: #999;
+            background: transparent;
+            border: none;
+            padding: 20px 5px;
+        """)
+        empty.setWordWrap(True)
+        empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.items_layout.addWidget(empty)
+
+    def _create_item(self, folder, enabled):
+        item = QWidget()
+        item.setStyleSheet("""
+            QWidget {
+                background-color: #f5f5f5;
+                border-radius: 4px;
+                border: none;
+            }
+        """)
+        item_layout = QHBoxLayout(item)
+        item_layout.setContentsMargins(6, 6, 6, 6)
+        item_layout.setSpacing(6)
+
+        checkbox = QCheckBox()
+        checkbox.setChecked(enabled)
+        checkbox.setFixedSize(18, 18)
+        checkbox.setStyleSheet("""
+            QCheckBox {
+                background: transparent;
+                border: none;
+                spacing: 0px;
+            }
+            QCheckBox::indicator {
+                width: 16px;
+                height: 16px;
+                border: 1px solid #999;
+                border-radius: 3px;
+                background-color: white;
+            }
+            QCheckBox::indicator:hover {
+                border: 1px solid #3498db;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #2ecc71;
+                border: 1px solid #27ae60;
+                image: none;
+            }
+        """)
+        checkbox.stateChanged.connect(
+            lambda state, f=folder, e=enabled: self._on_toggle(f, e, state)
+        )
+        item_layout.addWidget(checkbox, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        icon_label = QLabel()
+        icon_label.setFixedSize(32, 32)
+        icon_label.setStyleSheet("background-color: #ddd; border-radius: 4px; border: none;")
+        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        icon_path = folder / "icon.png"
+        loaded = False
+        if icon_path.exists():
+            pixmap = QPixmap(str(icon_path))
+            if not pixmap.isNull():
+                if not enabled:
+                    pixmap = self._grayscale(pixmap)
+                icon_label.setPixmap(pixmap.scaled(
+                    32, 32,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation
+                ))
+                loaded = True
+        if not loaded:
+            icon_label.setText("?")
+
+        if not enabled:
+            icon_label.setStyleSheet("background-color: #ddd; border-radius: 4px; border: none; opacity: 0.5;")
+
+        title = folder.name
+        pkg_path = folder / "package.json"
+        if pkg_path.exists():
+            try:
+                with open(pkg_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    if isinstance(data, dict):
+                        t = data.get('title') or data.get('name')
+                        if t:
+                            title = str(t)
+            except Exception:
+                pass
+
+        title_label = QLabel(title)
+        if enabled:
+            title_label.setStyleSheet("""
+                font-size: 12px;
+                color: #333;
+                background: transparent;
+                border: none;
+            """)
+        else:
+            title_label.setStyleSheet("""
+                font-size: 12px;
+                color: #999;
+                background: transparent;
+                border: none;
+            """)
+        title_label.setWordWrap(True)
+
+        item_layout.addWidget(icon_label)
+        item_layout.addWidget(title_label, 1)
+
+        return item
+
+    def _grayscale(self, pixmap):
+        image = pixmap.toImage()
+        for y in range(image.height()):
+            for x in range(image.width()):
+                pixel = image.pixelColor(x, y)
+                if pixel.alpha() == 0:
+                    continue
+                gray = int(0.299 * pixel.red() + 0.587 * pixel.green() + 0.114 * pixel.blue())
+                pixel.setRed(gray)
+                pixel.setGreen(gray)
+                pixel.setBlue(gray)
+                image.setPixelColor(x, y, pixel)
+        return QPixmap.fromImage(image)
+
+    def _on_toggle(self, folder, was_enabled, state):
+        if not self.version_folder:
+            return
+
+        now_enabled = (state == Qt.CheckState.Checked.value)
+        if now_enabled == was_enabled:
+            return
+
+        try:
+            content_folder = Path(str(self.version_folder)) / "content"
+            disabled_folder = content_folder / "disabled"
+            disabled_folder.mkdir(parents=True, exist_ok=True)
+
+            name = folder.name
+            if now_enabled:
+                src = disabled_folder / name
+                dst = content_folder / name
+            else:
+                src = content_folder / name
+                dst = disabled_folder / name
+
+            if src.exists():
+                if dst.exists():
+                    try:
+                        if dst.is_dir():
+                            shutil.rmtree(dst)
+                        else:
+                            dst.unlink()
+                    except Exception:
+                        pass
+                shutil.move(str(src), str(dst))
+        except Exception as e:
+            print(f"Ошибка переключения мода: {e}")
+
+        self.refresh()
+
+    def get_enabled_names(self):
+        result = set()
+        if not self.version_folder:
+            return result
+        try:
+            content_folder = Path(str(self.version_folder)) / "content"
+            if content_folder.exists():
+                for d in content_folder.iterdir():
+                    if d.is_dir() and d.name != "disabled":
+                        result.add(d.name)
+        except Exception:
+            pass
+        return result
+
+
 class ModCard(QFrame):
     image_requested = pyqtSignal(str)
     install_clicked = pyqtSignal(int, str, str, str)
@@ -458,6 +768,22 @@ class ModCard(QFrame):
             }
         """)
 
+    def _apply_update_style(self):
+        self.action_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                border-radius: 5px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+            QPushButton:disabled {
+                background-color: #bdc3c7;
+            }
+        """)
+
     def set_image_from_data(self, data):
         if not data:
             self.icon_label.setText("Err")
@@ -472,13 +798,23 @@ class ModCard(QFrame):
     def update_version(self, version):
         self.version_label.setText(f"Версия: {version}")
 
-    def set_installed(self, installed):
-        if installed:
-            self.action_btn.setText("Переустановить")
-            self._apply_reinstall_style()
-        else:
+    def set_installed(self, installed, latest_version=None, installed_version=None):
+        if not installed:
             self.action_btn.setText("Установить")
             self._apply_install_style()
+            return
+
+        has_update = False
+        if _is_valid_version(latest_version) and _is_valid_version(installed_version):
+            if _normalize_version_str(latest_version) != _normalize_version_str(installed_version):
+                has_update = True
+
+        if has_update:
+            self.action_btn.setText("Обновить")
+            self._apply_update_style()
+        else:
+            self.action_btn.setText("Переустановить")
+            self._apply_reinstall_style()
 
     def _on_install(self):
         if self.mod_id is None:
@@ -565,6 +901,14 @@ class InstallWorker(QThread):
                     shutil.rmtree(install_folder)
                 except Exception:
                     pass
+
+            disabled_folder = core_version_folder / "content" / "disabled" / self.content_name
+            if disabled_folder.exists():
+                try:
+                    shutil.rmtree(disabled_folder)
+                except Exception:
+                    pass
+
             install_folder.mkdir(parents=True, exist_ok=True)
 
             try:
@@ -617,6 +961,7 @@ class ModsWidget(QWidget):
         self.thread_manager = thread_manager
         self.target_version_folder = None
         self.installed_items = set()
+        self.installed_versions = {}
         self._is_active = False
 
         self.all_mods = []
@@ -741,14 +1086,25 @@ class ModsWidget(QWidget):
 
         main_layout.addWidget(top_bar)
 
+        body = QWidget()
+        body_layout = QHBoxLayout(body)
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.setSpacing(0)
+
+        self.installed_sidebar = InstalledSidebar(settings_manager)
+        body_layout.addWidget(self.installed_sidebar)
+
         self.mods_scroll = QScrollArea()
         self.mods_scroll.setWidgetResizable(True)
+        self.mods_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.mods_content = QWidget()
         self.mods_layout = QVBoxLayout(self.mods_content)
         self.mods_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.mods_scroll.setWidget(self.mods_content)
         self.mods_scroll.verticalScrollBar().valueChanged.connect(self.check_scroll_bottom)
-        main_layout.addWidget(self.mods_scroll)
+        body_layout.addWidget(self.mods_scroll, 1)
+
+        main_layout.addWidget(body, 1)
 
     def start(self):
         if self._is_active:
@@ -782,6 +1138,8 @@ class ModsWidget(QWidget):
             worker.start()
             self.version_workers.append(worker)
 
+        self.installed_sidebar.refresh()
+        self._reload_installed_versions()
         self.reload_data()
 
     def stop(self):
@@ -841,13 +1199,69 @@ class ModsWidget(QWidget):
 
         self.clear_layout()
 
-    def set_target_version(self, version_folder):
-        self.target_version_folder = version_folder
+    def set_target_version(self, version_name):
+        self.target_version_folder = version_name
+        if version_name:
+            try:
+                folder_path = Path(str(self.settings_manager.app_data_path)) / version_name
+                self.installed_sidebar.set_version(folder_path)
+            except Exception:
+                self.installed_sidebar.set_version(None)
+        else:
+            self.installed_sidebar.set_version(None)
+        self._reload_installed_versions()
+        self._refresh_cards_state()
+
+    def _reload_installed_versions(self):
+        self.installed_versions = {}
+        if not self.target_version_folder:
+            return
+        try:
+            folder = Path(str(self.settings_manager.app_data_path)) / self.target_version_folder
+            content = folder / "content"
+            disabled = content / "disabled"
+        except Exception:
+            return
+
+        for base in (content, disabled):
+            if not base.exists():
+                continue
+            try:
+                for d in base.iterdir():
+                    if d.is_dir() and d.name != "disabled":
+                        v = self._read_pkg_version(d)
+                        if v:
+                            self.installed_versions[d.name] = v
+            except Exception:
+                pass
+
+    def _read_pkg_version(self, folder):
+        pkg = folder / "package.json"
+        if not pkg.exists():
+            return None
+        try:
+            with open(pkg, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                v = data.get('version')
+                if v is not None:
+                    return str(v)
+        except Exception:
+            pass
+        return None
 
     def set_installed_items(self, installed_set):
         self.installed_items = set(installed_set or set())
+        self._reload_installed_versions()
+        self._refresh_cards_state()
+        self.installed_sidebar.refresh()
+
+    def _refresh_cards_state(self):
         for card in self.active_cards.values():
-            card.set_installed(card.mod_title in self.installed_items)
+            is_installed = card.mod_title in self.installed_items
+            latest = self.version_cache.get(card.mod_id)
+            installed_ver = self.installed_versions.get(card.mod_title)
+            card.set_installed(is_installed, latest, installed_ver)
 
     def on_search_text_changed(self, text):
         self.cache.pop(self.current_tab, None)
@@ -1121,6 +1535,9 @@ class ModsWidget(QWidget):
         card = self.active_cards.get(mod_id)
         if card:
             card.update_version(version)
+            is_installed = card.mod_title in self.installed_items
+            installed_ver = self.installed_versions.get(card.mod_title)
+            card.set_installed(is_installed, version, installed_ver)
         cache_key = (self.current_tab, self.search_bar.text(),
                      self.sort_combo.currentText(), self.tag_combo.currentData())
         if cache_key in self.cache:
@@ -1247,7 +1664,10 @@ class ModsWidget(QWidget):
             self.mods_layout.addWidget(card)
             if mod.get('id'):
                 self.active_cards[mod.get('id')] = card
-            card.set_installed(card.mod_title in self.installed_items)
+
+            is_installed = card.mod_title in self.installed_items
+            installed_ver = self.installed_versions.get(card.mod_title)
+            card.set_installed(is_installed, cached_ver, installed_ver)
 
         if not filtered:
             empty_label = QLabel("Элементы не найдены")

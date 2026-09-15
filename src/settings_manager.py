@@ -73,6 +73,12 @@ class SettingsManager:
             except (FileNotFoundError, json.JSONDecodeError):
                 pass
         
+        if self.system != 'win32':
+            try:
+                default_settings["artifacts"]["windows"]["msvc"] = False
+            except Exception:
+                pass
+        
         return default_settings
     
     def _save_settings(self, settings=None):
@@ -114,6 +120,8 @@ class SettingsManager:
         self._save_settings()
     
     def set_windows_artifact_visible(self, build_type, visible):
+        if self.system != 'win32':
+            return
         if build_type in ["msvc", "clang"]:
             self.settings["artifacts"]["windows"][build_type] = visible
             self._save_settings()

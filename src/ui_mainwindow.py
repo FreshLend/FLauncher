@@ -529,6 +529,11 @@ class FLauncher(QMainWindow):
         content_folder = core_version_folder / "content"
         if content_folder.exists():
             for item in content_folder.iterdir():
+                if item.is_dir() and item.name != "disabled":
+                    installed.add(item.name)
+        disabled_folder = content_folder / "disabled"
+        if disabled_folder.exists():
+            for item in disabled_folder.iterdir():
                 if item.is_dir():
                     installed.add(item.name)
         worlds_folder = core_version_folder / "worlds"
