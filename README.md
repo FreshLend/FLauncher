@@ -8,7 +8,7 @@
 - Discord Rich Presence
 - Интеграция других репозиториев
 - Похож на TLauncher
-- Страница модов
+- Меню модов
 
 В далёких планах:
 - FLauncher-Neo - дизайн лаунчера как Prism/MultiMC
