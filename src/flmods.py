@@ -313,23 +313,19 @@ class ImageDownloaderThread(QThread):
                     break
                 if url:
                     try:
-                        resp = requests.get(url, headers=headers, timeout=5)
+                        resp = requests.get(url, headers=headers, timeout=3)
                         if resp.status_code == 200:
                             self.image_downloaded.emit(url, resp.content)
                         else:
                             self.image_downloaded.emit(url, b'')
                     except Exception:
                         self.image_downloaded.emit(url, b'')
-                    time.sleep(0.1)
+                    time.sleep(0.05)
             except queue.Empty:
                 continue
             except Exception as e:
                 print(f"Ошибка в очереди картинок: {e}")
                 break
-
-    def stop(self):
-        self.running = False
-        self.wait(3000)
 
 
 class VersionDownloaderThread(QThread):
@@ -358,10 +354,6 @@ class VersionDownloaderThread(QThread):
             except Exception as e:
                 print(f"Ошибка в очереди версий: {e}")
                 break
-
-    def stop(self):
-        self.running = False
-        self.wait(3000)
 
 
 class InstalledSidebar(QWidget):
@@ -963,6 +955,7 @@ class ModsWidget(QWidget):
         self.installed_items = set()
         self.installed_versions = {}
         self._is_active = False
+        self._old_workers = []
 
         self.all_mods = []
         self.current_tab = "mods"
@@ -1106,10 +1099,22 @@ class ModsWidget(QWidget):
 
         main_layout.addWidget(body, 1)
 
+    def _cleanup_old_workers(self):
+        alive = []
+        for w in self._old_workers:
+            try:
+                if not w.isFinished():
+                    alive.append(w)
+            except RuntimeError:
+                pass
+        self._old_workers = alive
+
     def start(self):
         if self._is_active:
             return
         self._is_active = True
+
+        self._cleanup_old_workers()
 
         self.all_mods = []
         self.version_cache = {}
@@ -1147,29 +1152,54 @@ class ModsWidget(QWidget):
             return
         self._is_active = False
 
-        if hasattr(self, 'tag_worker') and self.tag_worker and self.tag_worker.isRunning():
+        for w in self.image_workers:
+            try:
+                w.image_downloaded.disconnect()
+            except Exception:
+                pass
+            w.running = False
+            self._old_workers.append(w)
+
+        for w in self.version_workers:
+            try:
+                w.version_fetched.disconnect()
+            except Exception:
+                pass
+            w.running = False
+            self._old_workers.append(w)
+
+        if hasattr(self, 'tag_worker') and self.tag_worker is not None:
+            try:
+                self.tag_worker.tags_loaded.disconnect()
+            except Exception:
+                pass
             self.tag_worker.cancelled = True
-            self.tag_worker.wait(1000)
+            self._old_workers.append(self.tag_worker)
+            self.tag_worker = None
 
-        if hasattr(self, 'worker') and self.worker and self.worker.isRunning():
+        if hasattr(self, 'worker') and self.worker is not None:
+            try:
+                self.worker.data_loaded.disconnect()
+                self.worker.error_occurred.disconnect()
+                self.worker.list_finished.disconnect()
+            except Exception:
+                pass
             self.worker.cancelled = True
-            self.worker.wait(1000)
+            self._old_workers.append(self.worker)
+            self.worker = None
 
-        for _ in self.image_workers:
+        for _ in range(len(self.image_workers) + 2):
             try:
                 self.image_queue.put_nowait(None)
             except Exception:
                 pass
-        for _ in self.version_workers:
+
+        for _ in range(len(self.version_workers) + 2):
             try:
                 self.version_queue.put_nowait(None)
             except Exception:
                 pass
 
-        for w in self.image_workers:
-            w.stop()
-        for w in self.version_workers:
-            w.stop()
         self.image_workers = []
         self.version_workers = []
 
