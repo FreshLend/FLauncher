@@ -1,6 +1,8 @@
+import logging
 from PyQt6.QtWidgets import QMainWindow, QMessageBox, QInputDialog
 from PyQt6.QtGui import QIcon, QDesktopServices
 from PyQt6.QtCore import QUrl, pyqtSlot, pyqtSignal, QTimer
+from logging_setup import setup_logging
 from ui_components import UIComponents
 from discord_rpc import DiscordRPC
 from version_manager import VersionManager
@@ -10,8 +12,11 @@ from download_worker import DownloadWorker
 from thread_manager import ThreadManager
 from github_client import GitHubClient
 from themes import ThemeManager
+from update_checker import UpdateChecker
 from utils import resource_path, VERSION
 from flmods import InstallWorker
+
+log = logging.getLogger("flauncher.ui")
 
 
 class FLauncher(QMainWindow):
@@ -22,14 +27,18 @@ class FLauncher(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.thread_manager = ThreadManager()
         self.settings_manager = SettingsManager()
+        setup_logging(self.settings_manager.logs_path)
+        log.info("Запуск FLauncher %s", VERSION)
+
+        self.thread_manager = ThreadManager()
         self.settings = self.settings_manager.settings
         self.theme_manager = ThemeManager(self.settings_manager)
         self.github_client = GitHubClient(self.settings_manager)
         self.version_manager = VersionManager(self.settings_manager, self.thread_manager)
         self.download_manager = DownloadManager(self.version_manager)
         self.discord_rpc = DiscordRPC(self.settings_manager)
+        self.update_checker = UpdateChecker()
         self.ui = UIComponents(self, self.settings_manager, self.theme_manager)
         self.artifact_data = {}
         self.setup_ui()
@@ -38,6 +47,7 @@ class FLauncher(QMainWindow):
         self.repo_added.connect(self.on_repo_added)
         self.versions_loaded.connect(self._update_versions_combo)
         self.load_failed.connect(lambda msg: self.show_error_message("Ошибка загрузки данных", msg))
+        self.update_checker.update_available.connect(self.on_update_available)
         self.ui.set_username_from_config(
             self.version_manager.get_username_from_config(
                 self.ui.version_combo.currentText()
@@ -47,12 +57,13 @@ class FLauncher(QMainWindow):
             self.connect_to_discord()
             self.set_discord_presence("Просматривает главную страницу", "")
         QTimer.singleShot(100, self.load_all_data)
+        QTimer.singleShot(1500, self.check_for_updates)
 
     def setup_ui(self):
         self.setGeometry(100, 100, 1100, 650)
         self.setFixedSize(1100, 650)
         self.setWindowTitle(f'FLauncher {VERSION}')
-        icon_path = resource_path('ui/icon.ico')
+        icon_path = resource_path('ui/images/icon.ico')
         self.setWindowIcon(QIcon(icon_path))
         self.ui.setup_all()
 
@@ -96,6 +107,26 @@ class FLauncher(QMainWindow):
         self.ui.mods_widget.install_requested.connect(self.on_mod_install_requested)
         self.ui.mods_target_version_changed.connect(self.on_version_selected_for_mods)
 
+    def check_for_updates(self):
+        self.thread_manager.submit(self.update_checker.check, VERSION)
+
+    @pyqtSlot(str, str)
+    def on_update_available(self, latest_version, release_url):
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.setWindowTitle("Доступно обновление")
+        msg.setText(f"Доступна новая версия FLauncher: {latest_version}")
+        msg.setInformativeText(
+            f"Текущая версия: {VERSION}\n\n"
+            f"Открыть страницу релизов в браузере?"
+        )
+        update_btn = msg.addButton("Обновить", QMessageBox.ButtonRole.AcceptRole)
+        close_btn = msg.addButton("Закрыть", QMessageBox.ButtonRole.RejectRole)
+        msg.setDefaultButton(update_btn)
+        msg.exec()
+        if msg.clickedButton() is update_btn:
+            QDesktopServices.openUrl(QUrl(release_url))
+
     @pyqtSlot(str)
     def on_theme_selected(self, key):
         if self.theme_manager.set_theme(key):
@@ -132,6 +163,7 @@ class FLauncher(QMainWindow):
                 if self.isVisible():
                     self.versions_loaded.emit(online_versions_info)
             except Exception as e:
+                log.exception("Ошибка загрузки данных")
                 if self.isVisible():
                     self.load_failed.emit(str(e))
 
@@ -161,6 +193,9 @@ class FLauncher(QMainWindow):
             self.ui.version_combo.setCurrentIndex(0)
         self.ui.download_info_label.setText("")
 
+        self._refresh_mods_panel_state()
+
+    def _refresh_mods_panel_state(self):
         user_versions_only = self.version_manager.get_user_versions()
         current_version = self.ui.version_combo.currentText()
         if self.ui.FL_MODS.isVisible():
@@ -315,6 +350,7 @@ class FLauncher(QMainWindow):
                 self.settings["launch_params"]["additional_args"]
             )
         except Exception as e:
+            log.exception("Ошибка запуска игры")
             self.show_error_message("Ошибка запуска", str(e))
             self.set_discord_presence(
                 "Просматривает главную страницу",
@@ -331,14 +367,8 @@ class FLauncher(QMainWindow):
         else:
             self.ui.show_flmods()
             self.set_discord_presence("Просматривает FLMODS", "", "mods")
-            user_versions = self.version_manager.get_user_versions()
-            current_version = self.ui.version_combo.currentText()
             self.ui.mods_widget.start()
-            self.ui.set_available_versions(user_versions, current_version)
-            if current_version and current_version != "Получение версий...":
-                installed = self.get_installed_mods_for_version(current_version)
-                self.ui.update_mods_installed_status(installed)
-                self.ui.update_version_info(current_version)
+            self._refresh_mods_panel_state()
 
     @pyqtSlot()
     def open_versions_folder(self):
@@ -403,6 +433,7 @@ class FLauncher(QMainWindow):
                 ui.clang_checkbox.blockSignals(False)
 
     def show_error_message(self, title, message):
+        log.error("%s: %s", title, message)
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Icon.Critical)
         msg.setWindowTitle(title)
@@ -525,7 +556,7 @@ class FLauncher(QMainWindow):
         self.settings_manager.update_launch_params(text)
 
     def closeEvent(self, event):
-        print("Закрытие приложения...")
+        log.info("Закрытие приложения...")
         try:
             self.ui.mods_widget.stop()
         except Exception:

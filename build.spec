@@ -34,19 +34,19 @@ print(f"Сборка FLauncher {VERSION} для {platform.system()}")
 params = {
     'windows': {
         'separator': ';',
-        'icon': os.path.join('src', 'ui', 'icon.ico'),
+        'icon': os.path.join('src', 'ui', 'images', 'icon.ico'),
         'name': f'FLauncher-{VERSION}.exe',
         'console': False
     },
     'linux': {
         'separator': ':',
-        'icon': os.path.join('src', 'ui', 'icon.png'),
+        'icon': os.path.join('src', 'ui', 'images', 'icon.png'),
         'name': f'FLauncher-{VERSION}',
         'console': False
     },
     'darwin': {
         'separator': ':',
-        'icon': os.path.join('src', 'ui', 'icon.icns'),
+        'icon': os.path.join('src', 'ui', 'images', 'icon.icns'),
         'name': f'FLauncher-{VERSION}',
         'console': False
     }
@@ -63,8 +63,18 @@ a = Analysis(
     ['src/main.py'],
     pathex=['src'],
     binaries=[],
-    datas=[('src/ui', 'ui')],
-    hiddenimports=[],
+    datas=[
+        ('src/ui/images', 'ui/images'),
+        ('src/themes', 'themes'),
+    ],
+    hiddenimports=[
+        'flmods',
+        'flmods.api',
+        'flmods.workers',
+        'flmods.widgets',
+        'ui',
+        'ui.widgets',
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

@@ -1,7 +1,9 @@
 import os
 import sys
+import zipfile
+from pathlib import Path
 
-VERSION = "v0.7.0"
+VERSION = "v0.8.0"
 MAIN_REPO = "MihailRis/voxelcore"
 MAX_LOAD = 1000
 
@@ -17,7 +19,6 @@ def resource_path(relative_path):
 
 def get_platform_asset_pattern():
     system = sys.platform
-    
     if system == 'win32':
         return 'win64.zip'
     elif system == 'darwin':
@@ -28,7 +29,6 @@ def get_platform_asset_pattern():
 
 def get_executable_pattern():
     system = sys.platform
-    
     if system == 'win32':
         return '.exe'
     elif system == 'darwin':
@@ -36,20 +36,30 @@ def get_executable_pattern():
     else:
         return '.AppImage'
 
+
 def format_date(date_str):
     if not date_str:
         return "Дата неизвестна"
-    
     try:
         from datetime import datetime
-        
         months_ru = {
             1: 'января', 2: 'февраля', 3: 'марта', 4: 'апреля',
             5: 'мая', 6: 'июня', 7: 'июля', 8: 'августа',
             9: 'сентября', 10: 'октября', 11: 'ноября', 12: 'декабря'
         }
-        
         release_date = datetime.strptime(date_str, '%Y-%m-%dT%H:%M:%SZ')
         return f"{release_date.day} {months_ru[release_date.month]} {release_date.year}"
-    except:
+    except Exception:
         return "Дата неизвестна"
+
+
+def safe_extract_zip(zip_path, target_dir):
+    target_dir = Path(target_dir).resolve()
+    with zipfile.ZipFile(zip_path, 'r') as zf:
+        for member in zf.namelist():
+            try:
+                member_path = (target_dir / member).resolve()
+                member_path.relative_to(target_dir)
+            except ValueError:
+                raise Exception(f"Небезопасный путь в архиве: {member}")
+        zf.extractall(target_dir)

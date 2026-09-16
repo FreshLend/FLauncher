@@ -1,17 +1,21 @@
 import sys
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QScrollArea, QLabel, QFrame, QPushButton,
-    QComboBox, QTabWidget, QHBoxLayout, QProgressBar,
-    QLineEdit, QSizePolicy, QSpinBox, QCheckBox
+    QComboBox, QHBoxLayout, QProgressBar,
+    QLineEdit, QSizePolicy, QSpinBox, QCheckBox,
+    QGraphicsScene, QGraphicsPixmapItem, QGraphicsBlurEffect,
 )
 from PyQt6.QtGui import (
-    QPalette, QBrush, QImage, QIcon, QDesktopServices,
-    QPainter, QPainterPath, QColor, QPen
+    QPalette, QBrush, QImage, QPixmap, QIcon, QDesktopServices,
+    QPainter,
 )
-from PyQt6.QtCore import Qt, QSize, QUrl, QObject, pyqtSignal, QRectF
+from PyQt6.QtCore import Qt, QSize, QUrl, QObject, pyqtSignal
 from utils import resource_path, MAIN_REPO, VERSION
-from layouts import get_layout
 from flmods import ModsWidget
+from ui.widgets import (
+    ArrowComboBox, ToggleSwitch, FullWidthTabWidget,
+    BlurredBackdrop, ReleaseDisplayWidget, parse_color,
+)
 
 
 def _platform_name():
@@ -31,282 +35,6 @@ def _platform_name():
         pass
 
     return "Linux"
-
-
-class FullWidthTabWidget(QTabWidget):
-    def __init__(self, parent=None, theme=None):
-        super().__init__(parent)
-        self.theme = theme or {}
-        self.tabBar().setExpanding(True)
-        self.tabBar().setDrawBase(False)
-        self._update_style()
-
-    def set_theme(self, theme):
-        self.theme = theme
-        self._update_style()
-
-    def _update_style(self):
-        count = max(self.count(), 1)
-        w = max(self.width() // count - 3, 60)
-        t = self.theme
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setAutoFillBackground(False)
-        self.setStyleSheet(f"""
-            QTabWidget {{
-                background: transparent;
-                border: none;
-            }}
-            QTabWidget::pane {{
-                border: none;
-                background: transparent;
-            }}
-            QTabWidget > QStackedWidget {{
-                background: transparent;
-            }}
-            QTabWidget > QStackedWidget > QWidget {{
-                background: transparent;
-            }}
-            QTabBar {{
-                background: transparent;
-            }}
-            QTabBar::tab {{
-                background-color: {t.get('settings_tab_bg', '#E4E4E4')};
-                border: none;
-                padding: 10px 0px;
-                margin: 0px 2px 0px 0px;
-                font-size: 14px;
-                color: {t.get('settings_tab_text', '#333')};
-                width: {w}px;
-            }}
-            QTabBar::tab:selected {{
-                background-color: {t.get('settings_tab_active', '#0086c7')};
-                color: {t.get('settings_tab_active_text', 'white')};
-                font-weight: bold;
-            }}
-            QTabBar::tab:!selected {{
-                background-color: {t.get('settings_tab_bg', '#E4E4E4')};
-            }}
-            QTabBar::tab:hover:!selected {{
-                background-color: {t.get('settings_tab_hover', '#D8D8D8')};
-            }}
-        """)
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._update_style()
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        self._update_style()
-
-
-class ToggleSwitch(QPushButton):
-    def __init__(self, parent=None, theme=None):
-        super().__init__(parent)
-        self.theme = theme or {}
-        self.setCheckable(True)
-        self.setFixedSize(48, 26)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setStyleSheet("QPushButton { background: transparent; border: none; }")
-
-    def set_theme(self, theme):
-        self.theme = theme
-        self.update()
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        rect = QRectF(0, 0, self.width(), self.height())
-        radius = self.height() / 2
-
-        track_path = QPainterPath()
-        track_path.addRoundedRect(rect, radius, radius)
-
-        accent = self.theme.get("accent", "#4CAF50")
-
-        if self.isChecked():
-            color = QColor(accent)
-            if self.underMouse():
-                color = color.lighter(110)
-        else:
-            color = QColor("#BDBDBD")
-            if self.underMouse():
-                color = QColor("#A8A8A8")
-
-        painter.fillPath(track_path, color)
-
-        thumb_size = self.height() - 4
-        if self.isChecked():
-            thumb_x = self.width() - thumb_size - 2
-        else:
-            thumb_x = 2
-
-        painter.setBrush(QColor("white"))
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawEllipse(QRectF(thumb_x, 2, thumb_size, thumb_size))
-
-    def enterEvent(self, event):
-        super().enterEvent(event)
-        self.update()
-
-    def leaveEvent(self, event):
-        super().leaveEvent(event)
-        self.update()
-
-
-class ArrowComboBox(QComboBox):
-    def __init__(self, parent=None, theme=None):
-        super().__init__(parent)
-        self.theme = theme or {}
-        self._popup_open = False
-
-    def set_theme(self, theme):
-        self.theme = theme
-        self.update()
-
-    def showPopup(self):
-        super().showPopup()
-        self._popup_open = True
-        self.update()
-
-    def hidePopup(self):
-        super().hidePopup()
-        self._popup_open = False
-        self.update()
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        rect = self.rect()
-        t = self.theme
-
-        bg_color = QColor(t.get("combo_bg", "white"))
-        text_color = QColor(t.get("combo_text", "#1e1e1e"))
-        arrow_color = QColor(t.get("combo_arrow", "#1e1e1e"))
-        focus_color = QColor(t.get("combo_focus", "#3498db"))
-
-        radius = int(self.theme.get("combo_radius", 5))
-        bg_path = QPainterPath()
-        bg_path.addRoundedRect(QRectF(rect), radius, radius)
-        painter.fillPath(bg_path, bg_color)
-
-        font = self.font()
-        font.setPointSize(14)
-        font.setBold(True)
-        painter.setFont(font)
-        painter.setPen(text_color)
-
-        text_rect = rect.adjusted(12, 0, -42, 0)
-        painter.drawText(
-            text_rect,
-            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
-            self.currentText()
-        )
-
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(arrow_color)
-
-        cx = rect.width() - 20
-        cy = rect.height() // 2
-        size = 7
-
-        arrow = QPainterPath()
-        if self._popup_open:
-            arrow.moveTo(cx - size, cy + size // 2)
-            arrow.lineTo(cx + size, cy + size // 2)
-            arrow.lineTo(cx, cy - size // 2 - 2)
-        else:
-            arrow.moveTo(cx - size, cy - size // 2)
-            arrow.lineTo(cx + size, cy - size // 2)
-            arrow.lineTo(cx, cy + size // 2 + 2)
-        arrow.closeSubpath()
-        painter.drawPath(arrow)
-
-        if self.hasFocus():
-            painter.setPen(QPen(focus_color, 2))
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawRoundedRect(QRectF(rect).adjusted(1, 1, -1, -1), radius, radius)
-
-
-class ReleaseDisplayWidget(QWidget):
-    def __init__(self, release_data, parent=None, theme=None):
-        super().__init__(parent)
-        self.theme = theme or {}
-        self.release_data = release_data
-        self.version_label = None
-        self.date_label = None
-        self.body_label = None
-        self._build()
-        self._apply_styles()
-
-    def _build(self):
-        data = self.release_data
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
-
-        header_layout = QHBoxLayout()
-        header_layout.setContentsMargins(0, 0, 0, 0)
-        header_layout.setSpacing(10)
-
-        self.version_label = QLabel()
-        self.version_label.setOpenExternalLinks(True)
-
-        self.date_label = QLabel(data.get("date", ""))
-
-        header_layout.addWidget(self.version_label)
-        header_layout.addStretch(1)
-        header_layout.addWidget(self.date_label)
-        layout.addLayout(header_layout)
-
-        if data.get('body_html'):
-            self.body_label = QLabel()
-            self.body_label.setOpenExternalLinks(True)
-            self.body_label.setText(data['body_html'])
-            self.body_label.setWordWrap(True)
-            layout.addWidget(self.body_label)
-
-    def _apply_styles(self):
-        t = self.theme
-        data = self.release_data
-        version_color = t.get("release_version", "#0066cc")
-
-        if self.version_label:
-            self.version_label.setText(
-                f'<a href="{data.get("release_url", "#")}" '
-                f'style="color: {version_color}; text-decoration: none;">'
-                f'VoxelCore {data.get("version", "")}</a>'
-            )
-            self.version_label.setStyleSheet(f"""
-                font-size: 22px;
-                font-weight: bold;
-                color: {t.get('release_text', '#222')};
-                background: transparent;
-                border: none;
-            """)
-
-        if self.date_label:
-            self.date_label.setStyleSheet(f"""
-                font-size: 12px;
-                color: {t.get('release_date', '#888')};
-                background: transparent;
-                border: none;
-            """)
-
-        if self.body_label:
-            self.body_label.setStyleSheet(f"""
-                font-size: 13px;
-                line-height: 1.5;
-                color: {t.get('release_text', '#333')};
-                background: transparent;
-                border: none;
-            """)
-
-    def apply_theme(self, theme):
-        self.theme = theme
-        self._apply_styles()
 
 
 class UIComponents(QObject):
@@ -340,6 +68,9 @@ class UIComponents(QObject):
         self.theme = theme_manager.current
 
         self.bar = None
+        self._background_pixmap = None
+        self._blur_backdrops = {}
+        self._blur_targets = []
         self.input_field = None
         self.version_combo = None
         self.progress_bar = None
@@ -405,7 +136,17 @@ class UIComponents(QObject):
         self.add_info_panel()
         self.add_settings_panel()
         self.add_fl_mods_panel()
+
+        self._blur_targets = [
+            (self.bar, "bar_bg", "bar_blur", "bar_radius"),
+            (self.scroll_area, "release_panel_bg", "release_panel_blur", "release_panel_radius"),
+            (self.info_panel, "info_panel_bg", "info_panel_blur", "info_panel_radius"),
+            (self.settings_panel, "settings_bg", "settings_blur", "settings_panel_radius"),
+            (self.FL_MODS, "flmods_bg", "flmods_blur", "bar_radius"),
+        ]
+
         self._apply_layout()
+        self._update_all_blurs()
 
     def apply_theme(self):
         self.theme = self.theme_manager.current
@@ -418,6 +159,7 @@ class UIComponents(QObject):
         self._refresh_releases_display()
         self._apply_layout()
         self._update_settings_backdrop()
+        self._update_all_blurs()
 
         if getattr(self, "_settings_open", False):
             self.settings_background.raise_()
@@ -593,6 +335,8 @@ class UIComponents(QObject):
         if mode == "centered":
             self.bar.raise_()
 
+        self._update_all_blurs()
+
     def set_background(self):
         self.main.setAutoFillBackground(True)
         palette = self.main.palette()
@@ -607,15 +351,20 @@ class UIComponents(QObject):
         if bg_path:
             image = QImage(str(bg_path))
         if image.isNull():
-            image = QImage(resource_path('ui/background.png'))
+            image = QImage(resource_path('ui/images/background.png'))
 
         brush = QBrush(image)
         palette.setBrush(QPalette.ColorRole.Window, brush)
         self.main.setPalette(palette)
 
+        self._background_pixmap = QPixmap.fromImage(image)
+        self._update_all_blurs()
+
     def add_bar(self):
         t = self.theme
         self.bar = QWidget(self.main)
+        self.bar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.bar.setAutoFillBackground(False)
 
         self.input_field = QLineEdit(self.bar)
         self.input_field.setPlaceholderText("Введите ник...")
@@ -630,63 +379,37 @@ class UIComponents(QObject):
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self.progress_bar.setTextVisible(False)
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
-                border: 1px solid grey;
-                border-radius: 5px;
-                text-align: center;
-            }
-            QProgressBar::chunk {
-                background-color: #05B8CC;
-                width: 10px;
-            }
-        """)
 
         self.download_info_label = QLabel(self.bar)
         self.download_info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.download_info_label.setText("")
 
         self.cancel_button = QPushButton("Отмена", self.bar)
-        self.cancel_button.setStyleSheet("""
-            QPushButton {
-                background-color: #ff4444;
-                color: white;
-                border: none;
-                border-radius: 3px;
-                font-size: 11px;
-            }
-            QPushButton:hover {
-                background-color: #ff5555;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-            }
-        """)
         self.cancel_button.clicked.connect(self.cancel_clicked)
         self.cancel_button.hide()
 
         self.play_button = QPushButton("Войти в игру", self.bar)
         self.play_button.clicked.connect(self.play_clicked)
 
-        icon_flm = QIcon(resource_path("ui/FLM.png"))
+        icon_flm = QIcon(resource_path("ui/images/FLM.png"))
         self.flm_button = QPushButton(self.bar)
         self.flm_button.setIcon(icon_flm)
         self.flm_button.setIconSize(QSize(60, 60))
         self.flm_button.clicked.connect(self.flm_clicked)
 
-        icon_reload = QIcon(resource_path("ui/reload.png"))
+        icon_reload = QIcon(resource_path("ui/images/reload.png"))
         self.reload_button = QPushButton(self.bar)
         self.reload_button.setIcon(icon_reload)
         self.reload_button.setIconSize(QSize(30, 30))
         self.reload_button.clicked.connect(self.reload_clicked)
 
-        icon_folder = QIcon(resource_path("ui/folder.png"))
+        icon_folder = QIcon(resource_path("ui/images/folder.png"))
         self.folder_button = QPushButton(self.bar)
         self.folder_button.setIcon(icon_folder)
         self.folder_button.setIconSize(QSize(30, 30))
         self.folder_button.clicked.connect(self.folder_clicked)
 
-        icon_settings = QIcon(resource_path("ui/settings.png"))
+        icon_settings = QIcon(resource_path("ui/images/settings.png"))
         self.settings_button = QPushButton(self.bar)
         self.settings_button.setIcon(icon_settings)
         self.settings_button.setIconSize(QSize(30, 30))
@@ -703,46 +426,52 @@ class UIComponents(QObject):
         t = self.theme
         layout = t.get("layout", {})
         mode = layout.get("mode", "bar")
-        bar_text = t.get("bottom_bar_text", "black")
-        accent = t.get("accent", "#3498db")
-        bar_radius = int(t.get("bar_radius", 15))
+        bar_radius = int(t.get("bar_radius", 0))
         input_radius = int(t.get("input_radius", 5))
         combo_radius = int(t.get("combo_radius", 5))
+        blur_r = int(t.get("bar_blur", 0))
+        bar_bg = t.get("bar_bg", "#71A94C")
+        bar_text = t.get("bar_text", "black")
+        bar_border = t.get("bar_border", "transparent")
+        bar_border_width = int(t.get("bar_border_width", 0))
+        accent = t.get("accent", "#3498db")
 
-        if mode == "centered":
-            self.bar.setStyleSheet(f"""
-                background-color: {t.get('bottom_bar', 'rgba(20, 25, 40, 0.95)')};
-                border-radius: {bar_radius}px;
-                border: 1px solid {t.get('info_panel_border', 'rgba(255, 255, 255, 0.25)')};
-            """)
+        if blur_r > 0:
+            if mode == "centered":
+                self.bar.setStyleSheet(f"""
+                    background: transparent;
+                    border-radius: {bar_radius}px;
+                    border: {bar_border_width}px solid {bar_border};
+                """)
+            else:
+                self.bar.setStyleSheet("background: transparent;")
         else:
-            self.bar.setStyleSheet(f"background-color: {t.get('bottom_bar', 'rgba(113, 169, 76, 0.9)')};")
+            if mode == "centered":
+                self.bar.setStyleSheet(f"""
+                    background-color: {bar_bg};
+                    border-radius: {bar_radius}px;
+                    border: {bar_border_width}px solid {bar_border};
+                """)
+            else:
+                self.bar.setStyleSheet(f"background-color: {bar_bg};")
 
         self.input_field.setStyleSheet(f"""
             QLineEdit {{
                 background-color: {t.get('input_bg', 'white')};
                 color: {t.get('input_text', 'black')};
-                font-size: 18px;
-                font-weight: bold;
+                font-size: {int(t.get('input_font_size', 18))}px;
+                font-weight: {t.get('input_font_weight', 'bold')};
                 border-radius: {input_radius}px;
-                padding: 5px;
-                border: 1px solid {t.get('input_border', 'transparent')};
+                padding: {int(t.get('input_padding_v', 5))}px {int(t.get('input_padding_h', 8))}px;
+                border: {int(t.get('input_border_width', 1))}px solid {t.get('input_border', 'transparent')};
             }}
         """)
 
         self.version_combo.setStyleSheet(f"""
-            QComboBox {{
-                background: transparent;
-                border: none;
-                padding: 0;
-            }}
-            QComboBox::drop-down {{
-                border: none;
-                background: transparent;
-                width: 0px;
-            }}
+            QComboBox {{ background: transparent; border: none; padding: 0; }}
+            QComboBox::drop-down {{ border: none; background: transparent; width: 0px; }}
             QComboBox QAbstractItemView {{
-                border: 1px solid #aaa;
+                border: {int(t.get('combo_border_width', 1))}px solid #aaa;
                 background-color: {t.get('combo_bg', 'white')};
                 color: {t.get('combo_text', 'black')};
                 selection-background-color: {accent};
@@ -756,48 +485,64 @@ class UIComponents(QObject):
 
         self.progress_bar.setStyleSheet(f"""
             QProgressBar {{
-                border: 1px solid {t.get('input_border', 'grey')};
-                border-radius: 5px;
+                border: {int(t.get('progress_border_width', 1))}px solid {t.get('progress_border', 'grey')};
+                border-radius: {int(t.get('progress_radius', 5))}px;
                 text-align: center;
-                background-color: {t.get('input_bg', 'white')};
+                background-color: {t.get('progress_track', 'white')};
             }}
             QProgressBar::chunk {{
-                background-color: {accent};
+                background-color: {t.get('progress_chunk', '#05B8CC')};
                 width: 10px;
             }}
         """)
 
-        self.download_info_label.setStyleSheet(
-            f"font-size: 12px; color: {bar_text}; background: transparent; border: none;"
-        )
+        progress_text = t.get("progress_text_color", bar_text)
+        progress_size = int(t.get("progress_text_size", 13))
+        progress_weight = t.get("progress_text_weight", "bold")
+        self.download_info_label.setStyleSheet(f"""
+            font-size: {progress_size}px;
+            font-weight: {progress_weight};
+            color: {progress_text};
+            background: transparent;
+            border: none;
+        """)
         self.download_info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.cancel_button.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {t.get('cancel_bg', '#ff4444')};
+                color: {t.get('cancel_text', 'white')};
+                border: none;
+                border-radius: {int(t.get('cancel_radius', 3))}px;
+                font-size: {int(t.get('cancel_font_size', 11))}px;
+            }}
+            QPushButton:hover {{ background-color: {t.get('cancel_hover', '#ff5555')}; }}
+            QPushButton:disabled {{ background-color: #cccccc; }}
+        """)
 
         self.play_button.setStyleSheet(f"""
             QPushButton {{
                 background-color: {t.get('play_bg', 'rgb(236, 193, 63)')};
                 color: {t.get('play_text', 'white')};
-                font-size: 18px;
-                font-weight: bold;
-                border-radius: {input_radius}px;
-                border: none;
+                font-size: {int(t.get('play_font_size', 18))}px;
+                font-weight: {t.get('play_font_weight', 'bold')};
+                border-radius: {int(t.get('play_radius', 5))}px;
+                border: {int(t.get('play_border_width', 0))}px solid {t.get('play_border', 'transparent')};
             }}
-            QPushButton:hover {{
-                background-color: {t.get('play_hover', 'rgb(246, 203, 73)')};
-            }}
-            QPushButton:pressed {{
-                background-color: {t.get('play_pressed', 'rgb(226, 183, 53)')};
-            }}
+            QPushButton:hover {{ background-color: {t.get('play_hover', 'rgb(246, 203, 73)')}; }}
+            QPushButton:pressed {{ background-color: {t.get('play_pressed', 'rgb(226, 183, 53)')}; }}
         """)
 
         icon_bg = t.get("icon_bg", "transparent")
         icon_border = t.get("icon_border", "transparent")
+        icon_border_width = int(t.get("icon_border_width", 1))
         icon_radius = int(t.get("icon_radius", 5))
-        icon_hover = t.get("icon_hover", "rgba(255, 255, 255, 0.1)")
+        icon_hover = t.get("icon_hover", "rgba(255, 255, 255, 25)")
         icon_pressed = t.get("icon_pressed", icon_hover)
 
         icon_style = f"""
             QPushButton {{
-                border: 1px solid {icon_border};
+                border: {icon_border_width}px solid {icon_border};
                 background-color: {icon_bg};
                 padding: 0;
                 outline: none;
@@ -805,29 +550,25 @@ class UIComponents(QObject):
             }}
             QPushButton:flat {{
                 background-color: {icon_bg};
-                border: 1px solid {icon_border};
+                border: {icon_border_width}px solid {icon_border};
             }}
             QPushButton:hover {{
                 background-color: {icon_hover};
-                border: 1px solid {icon_border};
+                border: {icon_border_width}px solid {icon_border};
             }}
             QPushButton:pressed {{
                 background-color: {icon_pressed};
-                border: 1px solid {icon_border};
-            }}
-            QPushButton:checked {{
-                background-color: {icon_hover};
-                border: 1px solid {icon_border};
+                border: {icon_border_width}px solid {icon_border};
             }}
         """
         for btn in (self.flm_button, self.reload_button, self.folder_button, self.settings_button):
             btn.setStyleSheet(icon_style)
 
         defaults = {
-            "flm": "ui/FLM.png",
-            "reload": "ui/reload.png",
-            "folder": "ui/folder.png",
-            "settings": "ui/settings.png",
+            "flm": "ui/images/FLM.png",
+            "reload": "ui/images/reload.png",
+            "folder": "ui/images/folder.png",
+            "settings": "ui/images/settings.png",
         }
         buttons = {
             "flm": self.flm_button,
@@ -848,6 +589,114 @@ class UIComponents(QObject):
             else:
                 btn.setIcon(QIcon(resource_path(defaults[name])))
 
+    def _blur_pixmap(self, pixmap, radius):
+        if pixmap is None or pixmap.isNull() or radius <= 0:
+            return pixmap
+
+        scene = QGraphicsScene()
+        item = QGraphicsPixmapItem(pixmap)
+        blur = QGraphicsBlurEffect()
+        blur.setBlurRadius(radius)
+        blur.setBlurHints(QGraphicsBlurEffect.BlurHint.QualityHint)
+        item.setGraphicsEffect(blur)
+        scene.addItem(item)
+
+        result = QImage(pixmap.size(), QImage.Format.Format_ARGB32_Premultiplied)
+        result.fill(Qt.GlobalColor.transparent)
+
+        painter = QPainter(result)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        scene.render(painter)
+        painter.end()
+
+        scene.removeItem(item)
+        return QPixmap.fromImage(result)
+
+    def _ensure_blur_backdrop(self, widget):
+        if widget in self._blur_backdrops:
+            bd = self._blur_backdrops[widget]
+            try:
+                bd.isVisible()
+                return bd
+            except RuntimeError:
+                pass
+        bd = BlurredBackdrop(widget)
+        bd.hide()
+        self._blur_backdrops[widget] = bd
+        return bd
+
+    def _update_widget_blur(self, widget, bg_key, blur_key, radius_key):
+        if widget is None:
+            return
+
+        t = self.theme
+        blur_r = int(t.get(blur_key, 0))
+        bd = self._ensure_blur_backdrop(widget)
+
+        if blur_r <= 0 or self._background_pixmap is None or self._background_pixmap.isNull():
+            bd.hide()
+            return
+
+        if widget is self.settings_panel and not getattr(self, "_settings_open", False):
+            bd.hide()
+            return
+
+        bg = self._background_pixmap
+
+        try:
+            top_left = widget.mapTo(self.main, widget.rect().topLeft())
+            x, y = top_left.x(), top_left.y()
+        except Exception:
+            bd.hide()
+            return
+
+        w = widget.width()
+        h = widget.height()
+
+        if w <= 0 or h <= 0:
+            bd.hide()
+            return
+
+        bg_w = bg.width()
+        bg_h = bg.height()
+
+        crop_x = max(0, min(x, bg_w))
+        crop_y = max(0, min(y, bg_h))
+        crop_w = max(0, min(w, bg_w - crop_x))
+        crop_h = max(0, min(h, bg_h - crop_y))
+
+        if crop_w <= 0 or crop_h <= 0:
+            bd.hide()
+            return
+
+        cropped = bg.copy(crop_x, crop_y, crop_w, crop_h)
+        if cropped.width() != w or cropped.height() != h:
+            cropped = cropped.scaled(
+                w, h,
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+
+        blurred = self._blur_pixmap(cropped, blur_r)
+
+        overlay = parse_color(t.get(bg_key, "transparent"))
+        if overlay.isValid() and overlay.alpha() > 0:
+            p = QPainter(blurred)
+            p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+            p.fillRect(blurred.rect(), overlay)
+            p.end()
+
+        radius = int(t.get(radius_key, 0))
+        bd.set_radius(radius)
+        bd.set_pixmap(blurred)
+        bd.setGeometry(0, 0, w, h)
+        bd.show()
+        bd.lower()
+
+    def _update_all_blurs(self):
+        for widget, bg_key, blur_key, radius_key in self._blur_targets:
+            self._update_widget_blur(widget, bg_key, blur_key, radius_key)
+
     def add_release_panel(self):
         self.release_panel = QWidget(self.main)
         self.release_layout = QVBoxLayout(self.release_panel)
@@ -857,8 +706,11 @@ class UIComponents(QObject):
         self.scroll_area.setWidget(self.release_panel)
         self.scroll_area.setWidgetResizable(True)
         self.release_panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.scroll_area.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.scroll_area.setAutoFillBackground(False)
         self.scroll_area.setStyleSheet("""
             QScrollArea { border: none; background: transparent; }
+            QScrollArea > QWidget > QWidget { background: transparent; }
             QScrollBar:vertical {
                 border: none;
                 background: rgba(200, 200, 200, 0.35);
@@ -882,11 +734,26 @@ class UIComponents(QObject):
 
     def _apply_release_panel_theme(self):
         t = self.theme
-        self.release_panel.setStyleSheet(f"""
-            background-color: {t.get('release_panel_bg', 'rgba(255, 255, 255, 0.85)')};
-            border-radius: 15px;
-            border: 1px solid {t.get('release_panel_border', 'rgba(255, 255, 255, 0.35)')};
-        """)
+        blur_r = int(t.get("release_panel_blur", 0))
+        radius = int(t.get("release_panel_radius", 15))
+        border_w = int(t.get("release_panel_border_width", 1))
+        border_c = t.get("release_panel_border", "rgba(255, 255, 255, 89)")
+
+        if blur_r > 0:
+            self.release_panel.setStyleSheet(f"""
+                background: transparent;
+                border-radius: {radius}px;
+                border: {border_w}px solid {border_c};
+            """)
+        else:
+            self.release_panel.setStyleSheet(f"""
+                background-color: {t.get('release_panel_bg', 'rgba(255, 255, 255, 217)')};
+                border-radius: {radius}px;
+                border: {border_w}px solid {border_c};
+            """)
+
+        if hasattr(self, "_blur_targets") and self._blur_targets:
+            self._update_all_blurs()
 
     def display_releases(self, releases_data):
         for i in reversed(range(self.release_layout.count())):
@@ -921,7 +788,7 @@ class UIComponents(QObject):
             if len(repos_dict) > 1:
                 repo_header = QLabel(f'Репозиторий: {repo}')
                 repo_header.setStyleSheet(f"""
-                    font-size: 16px;
+                    font-size: {int(t.get('release_version_size', 16))}px;
                     font-weight: bold;
                     color: {t.get('release_text', '#333')};
                     background: transparent;
@@ -944,7 +811,7 @@ class UIComponents(QObject):
         )
         all_releases_label.setOpenExternalLinks(True)
         all_releases_label.setStyleSheet(f"""
-            font-size: 14px;
+            font-size: {int(t.get('release_text_size', 14))}px;
             color: {t.get('release_text', '#555')};
             background: transparent;
             border: none;
@@ -1033,23 +900,34 @@ class UIComponents(QObject):
     def _apply_info_panel_theme(self):
         t = self.theme
         text_color = t.get("info_text", "white")
+        blur_r = int(t.get("info_panel_blur", 0))
+        radius = int(t.get("info_panel_radius", 15))
+        border_w = int(t.get("info_panel_border_width", 1))
+        border_c = t.get("info_panel_border", "rgba(255, 255, 255, 51)")
 
-        self.info_panel.setStyleSheet(f"""
-            background-color: {t.get('info_panel_bg', 'rgba(90, 171, 215, 0.5)')};
-            border-radius: 15px;
-            border: 1px solid {t.get('info_panel_border', 'rgba(255, 255, 255, 0.2)')};
-        """)
+        if blur_r > 0:
+            self.info_panel.setStyleSheet(f"""
+                background: transparent;
+                border-radius: {radius}px;
+                border: {border_w}px solid {border_c};
+            """)
+        else:
+            self.info_panel.setStyleSheet(f"""
+                background-color: {t.get('info_panel_bg', 'rgba(90, 171, 215, 128)')};
+                border-radius: {radius}px;
+                border: {border_w}px solid {border_c};
+            """)
 
         self.header_title.setStyleSheet(f"""
-            font-size: 30px;
-            font-weight: bold;
+            font-size: {int(t.get('info_title_size', 30))}px;
+            font-weight: {t.get('info_title_weight', 'bold')};
             color: {text_color};
             background: transparent;
             border: none;
         """)
 
         self.header_subtitle.setStyleSheet(f"""
-            font-size: 13px;
+            font-size: {int(t.get('info_subtitle_size', 13))}px;
             font-weight: normal;
             color: {text_color};
             background: transparent;
@@ -1058,32 +936,32 @@ class UIComponents(QObject):
 
         btn_style = f"""
             QPushButton {{
-                background-color: {t.get('info_btn_bg', 'rgba(62, 148, 182, 0.85)')};
-                font-size: 16px;
+                background-color: {t.get('info_btn_bg', 'rgba(62, 148, 182, 217)')};
+                font-size: {int(t.get('info_btn_font_size', 16))}px;
                 color: {text_color};
                 padding: 10px;
-                border-radius: 8px;
-                border: 1px solid {t.get('info_btn_border', 'rgba(255, 255, 255, 0.3)')};
+                border-radius: {int(t.get('info_btn_radius', 8))}px;
+                border: {int(t.get('info_btn_border_width', 1))}px solid {t.get('info_btn_border', 'rgba(255, 255, 255, 77)')};
             }}
             QPushButton:hover {{
-                background-color: {t.get('info_btn_hover', 'rgba(72, 158, 192, 0.95)')};
-                border: 1px solid {t.get('info_btn_border_hover', 'rgba(255, 255, 255, 0.5)')};
+                background-color: {t.get('info_btn_hover', 'rgba(72, 158, 192, 242)')};
+                border: {int(t.get('info_btn_border_width', 1))}px solid {t.get('info_btn_border_hover', 'rgba(255, 255, 255, 128)')};
             }}
             QPushButton:pressed {{
-                background-color: {t.get('info_btn_pressed', 'rgba(52, 138, 172, 1.0)')};
+                background-color: {t.get('info_btn_pressed', 'rgba(52, 138, 172, 255)')};
             }}
         """
         for btn in self.info_buttons:
             btn.setStyleSheet(btn_style)
 
-        bottom_label_style = f"""
-            font-size: 13px;
+        bottom_style = f"""
+            font-size: {int(t.get('info_meta_size', 13))}px;
             color: {text_color};
             background: transparent;
             border: none;
         """
-        self.bottom_platform_label.setStyleSheet(bottom_label_style)
-        self.bottom_version_label.setStyleSheet(bottom_label_style)
+        self.bottom_platform_label.setStyleSheet(bottom_style)
+        self.bottom_version_label.setStyleSheet(bottom_style)
 
     def add_settings_panel(self):
         t = self.theme
@@ -1146,120 +1024,62 @@ class UIComponents(QObject):
         mode = layout.get("mode", "bar")
         settings_mode = layout.get("settings_mode", "fullscreen")
         side = mode == "centered" and settings_mode in ("right", "left")
-        panel_radius = int(t.get("bar_radius", 15))
+        panel_radius = int(t.get("settings_panel_radius", t.get("bar_radius", 15)))
         header_text = t.get("settings_header_text", "#ffffff")
+        blur_r = int(t.get("settings_blur", 0))
+
+        self.settings_background.setStyleSheet(
+            f"background-color: {t.get('settings_backdrop_color', 'rgba(0, 0, 0, 128)')};"
+        )
 
         self.settings_panel.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.settings_panel.setAutoFillBackground(False)
         self.settings_header_strip.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.settings_header_strip.setAutoFillBackground(False)
 
+        panel_border = t.get("settings_panel_border", "transparent")
+        panel_border_width = int(t.get("settings_panel_border_width", 0))
+
         if side:
-            self.settings_panel.setStyleSheet(f"""
-                background-color: {t.get('settings_bg', 'rgba(255, 255, 255, 210)')};
-                border: 1px solid {t.get('group_border', '#E0E0E0')};
-                border-radius: {panel_radius}px;
-            """)
+            if blur_r > 0:
+                self.settings_panel.setStyleSheet(f"""
+                    background: transparent;
+                    border: {panel_border_width}px solid {panel_border};
+                    border-radius: {panel_radius}px;
+                """)
+            else:
+                self.settings_panel.setStyleSheet(f"""
+                    background-color: {t.get('settings_bg', 'rgba(255, 255, 255, 210)')};
+                    border: {panel_border_width}px solid {panel_border};
+                    border-radius: {panel_radius}px;
+                """)
             self.settings_header_strip.setStyleSheet(f"""
                 background-color: {t.get('settings_header', 'rgba(235, 235, 235, 150)')};
                 border-top-left-radius: {panel_radius}px;
                 border-top-right-radius: {panel_radius}px;
             """)
         else:
-            self.settings_panel.setStyleSheet(f"""
-                background-color: {t.get('settings_bg', '#f5f5f5')};
-                border-radius: 0px;
-            """)
+            if blur_r > 0:
+                self.settings_panel.setStyleSheet("background: transparent;")
+            else:
+                self.settings_panel.setStyleSheet(f"""
+                    background-color: {t.get('settings_bg', '#f5f5f5')};
+                    border-radius: 0px;
+                """)
             self.settings_header_strip.setStyleSheet(
                 f"background-color: {t.get('settings_header', '#0086c7')};"
             )
 
-        self.settings_header_label.setStyleSheet(f"""
-            font-size: 20px;
-            font-weight: bold;
-            color: {header_text};
-            background: transparent;
-            border: none;
-        """)
-
-        self.settings_close_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: transparent;
-                color: {header_text};
-                font-size: 20px;
-                font-weight: bold;
-                border: none;
-            }}
-            QPushButton:hover {{
-                background-color: rgba(0, 0, 0, 40);
-                border-radius: 15px;
-            }}
-        """)
-
-        if self.tab_widget:
-            self.tab_widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-            self.tab_widget.setAutoFillBackground(False)
-            self.tab_widget.set_theme(t)
-
-        for tab in (self.launch_tab, self.flauncher_tab, self.privacy_tab):
-            if tab:
-                tab.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-                tab.setAutoFillBackground(False)
-                tab.setStyleSheet("background: transparent; border: none;")
-                for sa in tab.findChildren(QScrollArea):
-                    sa.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-                    sa.setAutoFillBackground(False)
-                    sa.viewport().setAutoFillBackground(False)
-                    sa.viewport().setStyleSheet("background: transparent;")
-
-        for group, title_label, content in self.group_boxes:
-            group.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-            group.setAutoFillBackground(False)
-            content.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-            content.setAutoFillBackground(False)
-            title_label.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-            title_label.setAutoFillBackground(False)
-
-            if side:
-                group.setStyleSheet(f"""
-                    #settingsGroupBox {{
-                        background-color: {t.get('group_body_bg', 'rgba(255, 255, 255, 180)')};
-                        border: 1px solid {t.get('group_border', 'rgba(200, 200, 200, 150)')};
-                        border-radius: 5px;
-                    }}
-                """)
-                title_label.setStyleSheet(f"""
-                    font-size: 14px;
-                    font-weight: bold;
-                    color: {t.get('group_title_text', '#333')};
-                    background-color: {t.get('group_title_bg', 'rgba(245, 245, 245, 180)')};
-                    padding: 8px 15px;
-                    border-top-left-radius: 5px;
-                    border-top-right-radius: 5px;
-                    border-bottom: 1px solid {t.get('group_border', 'rgba(200, 200, 200, 150)')};
-                """)
-            else:
-                group.setStyleSheet(f"""
-                    #settingsGroupBox {{
-                        background-color: {t.get('group_body_bg', 'white')};
-                        border: 1px solid {t.get('group_border', '#E0E0E0')};
-                        border-radius: 5px;
-                    }}
-                """)
-                title_label.setStyleSheet(f"""
-                    font-size: 14px;
-                    font-weight: bold;
-                    color: {t.get('group_title_text', '#333')};
-                    background-color: {t.get('group_title_bg', '#F5F5F5')};
-                    padding: 8px 15px;
-                    border-top-left-radius: 5px;
-                    border-top-right-radius: 5px;
-                    border-bottom: 1px solid {t.get('group_border', '#E0E0E0')};
-                """)
+        self._apply_settings_header_theme(header_text)
+        self._apply_settings_tabs_theme()
+        self._apply_settings_groups_theme(side)
+        self._apply_settings_inputs_theme()
+        self._apply_settings_checkboxes_theme()
+        self._apply_settings_buttons_theme()
 
         for lbl in self.settings_labels:
             lbl.setStyleSheet(f"""
-                font-size: 13px;
+                font-size: {int(t.get('group_title_size', 13))}px;
                 color: {t.get('group_title_text', '#555')};
                 background: transparent;
                 border: none;
@@ -1277,100 +1097,138 @@ class UIComponents(QObject):
                 border-top-right-radius: 5px;
             """)
 
+        if self.discord_toggle:
+            self.discord_toggle.set_theme(t)
+        if self.artifacts_toggle:
+            self.artifacts_toggle.set_theme(t)
+
+    def _apply_settings_header_theme(self, header_text):
+        t = self.theme
+        self.settings_header_label.setStyleSheet(f"""
+            font-size: {int(t.get('settings_header_size', 20))}px;
+            font-weight: {t.get('settings_header_weight', 'bold')};
+            color: {header_text};
+            background: transparent;
+            border: none;
+        """)
+
+        close_hover = t.get("settings_close_hover_bg", "rgba(0, 0, 0, 40)")
+        close_size = int(t.get("settings_close_size", 20))
+        self.settings_close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {header_text};
+                font-size: {close_size}px;
+                font-weight: bold;
+                border: none;
+            }}
+            QPushButton:hover {{
+                background-color: {close_hover};
+                border-radius: 15px;
+            }}
+        """)
+
+    def _apply_settings_tabs_theme(self):
+        t = self.theme
+        if self.tab_widget:
+            self.tab_widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            self.tab_widget.setAutoFillBackground(False)
+            self.tab_widget.set_theme(t)
+
+        for tab in (self.launch_tab, self.flauncher_tab, self.privacy_tab):
+            if tab:
+                tab.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+                tab.setAutoFillBackground(False)
+                tab.setStyleSheet("background: transparent; border: none;")
+                for sa in tab.findChildren(QScrollArea):
+                    sa.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+                    sa.setAutoFillBackground(False)
+                    sa.viewport().setAutoFillBackground(False)
+                    sa.viewport().setStyleSheet("background: transparent;")
+
+    def _apply_settings_groups_theme(self, side):
+        t = self.theme
+        for group, title_label, content in self.group_boxes:
+            group.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            group.setAutoFillBackground(False)
+            content.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            content.setAutoFillBackground(False)
+            title_label.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            title_label.setAutoFillBackground(False)
+
+            group_radius = int(t.get("group_radius", 5))
+            group.setStyleSheet(f"""
+                #settingsGroupBox {{
+                    background-color: {t.get('group_body_bg', 'white')};
+                    border: {int(t.get('group_border_width', 1))}px solid {t.get('group_border', '#E0E0E0')};
+                    border-radius: {group_radius}px;
+                }}
+            """)
+            title_label.setStyleSheet(f"""
+                font-size: {int(t.get('group_title_size', 14))}px;
+                font-weight: {t.get('group_title_weight', 'bold')};
+                color: {t.get('group_title_text', '#333')};
+                background-color: {t.get('group_title_bg', '#F5F5F5')};
+                padding: {int(t.get('group_title_padding_v', 8))}px {int(t.get('group_title_padding_h', 15))}px;
+                border-top-left-radius: {group_radius}px;
+                border-top-right-radius: {group_radius}px;
+                border-bottom: {int(t.get('group_border_width', 1))}px solid {t.get('group_border', '#E0E0E0')};
+            """)
+
+    def _apply_settings_inputs_theme(self):
+        t = self.theme
+        input_qss = f"""
+            QLineEdit {{
+                border: {int(t.get('input_field_border_width', 1))}px solid {t.get('input_field_border', '#CCC')};
+                padding: {int(t.get('input_field_padding_v', 6))}px {int(t.get('input_field_padding_h', 10))}px;
+                font-size: {int(t.get('input_field_font_size', 13))}px;
+                background-color: {t.get('input_field_bg', 'white')};
+                color: {t.get('input_field_text', 'black')};
+                border-radius: {int(t.get('input_field_radius', 3))}px;
+            }}
+            QLineEdit:focus {{
+                border: {int(t.get('input_field_border_width', 1))}px solid {t.get('input_field_focus', '#0086c7')};
+            }}
+        """
         if self.additional_args_input:
-            self.additional_args_input.setStyleSheet(f"""
-                QLineEdit {{
-                    border: 1px solid {t.get('input_field_border', '#CCC')};
-                    padding: 8px 12px;
-                    font-size: 13px;
-                    background-color: {t.get('input_field_bg', 'white')};
-                    color: {t.get('input_field_text', 'black')};
-                    border-radius: 3px;
-                }}
-                QLineEdit:focus {{
-                    border: 1px solid {t.get('input_field_focus', '#0086c7')};
-                }}
-            """)
-
+            self.additional_args_input.setStyleSheet(input_qss)
         if self.github_token_input:
-            self.github_token_input.setStyleSheet(f"""
-                QLineEdit {{
-                    border: 1px solid {t.get('input_field_border', '#CCC')};
-                    padding: 6px 10px;
-                    font-size: 13px;
-                    background-color: {t.get('input_field_bg', 'white')};
-                    color: {t.get('input_field_text', 'black')};
-                    border-radius: 3px;
-                }}
-                QLineEdit:focus {{
-                    border: 1px solid {t.get('input_field_focus', '#2196F3')};
-                }}
-            """)
+            self.github_token_input.setStyleSheet(input_qss)
 
+        combo_qss = f"""
+            QComboBox {{
+                border: {int(t.get('input_field_border_width', 1))}px solid {t.get('input_field_border', '#CCC')};
+                padding: {int(t.get('input_field_padding_v', 6))}px {int(t.get('input_field_padding_h', 10))}px;
+                font-size: {int(t.get('input_field_font_size', 13))}px;
+                background-color: {t.get('input_field_bg', 'white')};
+                color: {t.get('input_field_text', 'black')};
+                border-radius: {int(t.get('input_field_radius', 3))}px;
+            }}
+            QComboBox:focus {{
+                border: {int(t.get('input_field_border_width', 1))}px solid {t.get('input_field_focus', '#0086c7')};
+            }}
+            QComboBox::drop-down {{ border: none; width: 24px; }}
+            QComboBox QAbstractItemView {{
+                background-color: {t.get('input_field_bg', 'white')};
+                color: {t.get('input_field_text', 'black')};
+                selection-background-color: {t.get('accent', '#3498db')};
+                selection-color: white;
+                outline: none;
+                border: {int(t.get('input_field_border_width', 1))}px solid {t.get('input_field_border', '#CCC')};
+            }}
+        """
         if self.theme_combo:
-            self.theme_combo.setStyleSheet(f"""
-                QComboBox {{
-                    border: 1px solid {t.get('input_field_border', '#CCC')};
-                    padding: 6px 10px;
-                    font-size: 13px;
-                    background-color: {t.get('input_field_bg', 'white')};
-                    color: {t.get('input_field_text', 'black')};
-                    border-radius: 3px;
-                }}
-                QComboBox:focus {{
-                    border: 1px solid {t.get('input_field_focus', '#0086c7')};
-                }}
-                QComboBox::drop-down {{
-                    border: none;
-                    width: 24px;
-                }}
-                QComboBox QAbstractItemView {{
-                    background-color: {t.get('input_field_bg', 'white')};
-                    color: {t.get('input_field_text', 'black')};
-                    selection-background-color: {t.get('accent', '#3498db')};
-                    selection-color: white;
-                    outline: none;
-                    border: 1px solid {t.get('input_field_border', '#CCC')};
-                }}
-            """)
-
-        if self.reload_theme_btn:
-            self.reload_theme_btn.setStyleSheet(f"""
-                QPushButton {{
-                    font-size: 16px;
-                    font-weight: bold;
-                    background-color: {t.get('input_field_bg', 'white')};
-                    color: {t.get('input_field_text', 'black')};
-                    border: 1px solid {t.get('input_field_border', '#CCC')};
-                    border-radius: 3px;
-                }}
-                QPushButton:hover {{
-                    background-color: {t.get('accent', '#3498db')};
-                    color: white;
-                    border: 1px solid {t.get('accent', '#3498db')};
-                }}
-                QPushButton:pressed {{
-                    background-color: {t.get('accent_hover', '#2980b9')};
-                    color: white;
-                }}
-                QToolTip {{
-                    background-color: {t.get('input_field_bg', 'white')};
-                    color: {t.get('input_field_text', 'black')};
-                    border: 1px solid {t.get('input_field_border', '#CCC')};
-                    padding: 6px 10px;
-                    border-radius: 4px;
-                }}
-            """)
+            self.theme_combo.setStyleSheet(combo_qss)
 
         if self.artifacts_count_spin:
             self.artifacts_count_spin.setStyleSheet(f"""
                 QSpinBox {{
-                    border: 1px solid {t.get('input_field_border', '#CCC')};
+                    border: {int(t.get('input_field_border_width', 1))}px solid {t.get('input_field_border', '#CCC')};
                     padding: 4px 8px;
-                    font-size: 13px;
+                    font-size: {int(t.get('input_field_font_size', 13))}px;
                     background-color: {t.get('input_field_bg', 'white')};
                     color: {t.get('input_field_text', 'black')};
-                    border-radius: 3px;
+                    border-radius: {int(t.get('input_field_radius', 3))}px;
                 }}
                 QSpinBox::up-button, QSpinBox::down-button {{
                     background-color: {t.get('group_title_bg', '#F0F0F0')};
@@ -1379,31 +1237,12 @@ class UIComponents(QObject):
                 }}
             """)
 
-        for cb in (
-            getattr(self, 'msvc_checkbox', None),
-            getattr(self, 'clang_checkbox', None),
-        ):
-            if cb:
-                cb.setStyleSheet(f"""
-                    QCheckBox {{
-                        font-size: 13px;
-                        color: {t.get('group_title_text', '#333')};
-                        spacing: 6px;
-                        background: transparent;
-                        border: none;
-                    }}
-                    QCheckBox::indicator {{
-                        width: 16px;
-                        height: 16px;
-                    }}
-                """)
-
         if self.repos_scroll:
             self.repos_scroll.setStyleSheet(f"""
                 QScrollArea {{
-                    border: 1px solid {t.get('group_border', '#DDD')};
+                    border: {int(t.get('group_border_width', 1))}px solid {t.get('group_border', '#DDD')};
                     background-color: {t.get('group_body_bg', 'white')};
-                    border-radius: 3px;
+                    border-radius: {int(t.get('group_radius', 3))}px;
                 }}
                 QScrollBar:vertical {{
                     border: none;
@@ -1418,69 +1257,120 @@ class UIComponents(QObject):
                 }}
             """)
 
+    def _apply_settings_checkboxes_theme(self):
+        t = self.theme
+        checkbox_qss = f"""
+            QCheckBox {{
+                font-size: {int(t.get('checkbox_font_size', 13))}px;
+                color: {t.get('checkbox_text', '#333')};
+                spacing: 6px;
+                background: transparent;
+                border: none;
+            }}
+            QCheckBox::indicator {{
+                width: {int(t.get('checkbox_size', 16))}px;
+                height: {int(t.get('checkbox_size', 16))}px;
+                border: {int(t.get('checkbox_border_width', 1))}px solid {t.get('checkbox_border', '#999')};
+                border-radius: 3px;
+                background-color: {t.get('input_field_bg', 'white')};
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {t.get('checkbox_checked_bg', '#2ecc71')};
+                border: {int(t.get('checkbox_border_width', 1))}px solid {t.get('checkbox_checked_border', '#27ae60')};
+            }}
+        """
+        for cb in (getattr(self, 'msvc_checkbox', None), getattr(self, 'clang_checkbox', None)):
+            if cb:
+                cb.setStyleSheet(checkbox_qss)
+
+    def _apply_settings_buttons_theme(self):
+        t = self.theme
+
         if self.open_themes_button:
-            accent = t.get("accent", "#3498db")
-            accent_hover = t.get("accent_hover", "#2980b9")
             self.open_themes_button.setStyleSheet(f"""
                 QPushButton {{
-                    font-size: 13px;
-                    background-color: {accent};
-                    color: white;
+                    font-size: {int(t.get('open_themes_btn_font_size', 13))}px;
+                    font-weight: {t.get('open_themes_btn_font_weight', 'normal')};
+                    background-color: {t.get('open_themes_btn_bg', '#3498db')};
+                    color: {t.get('open_themes_btn_text', 'white')};
                     padding: 6px 15px;
-                    border: none;
-                    border-radius: 3px;
+                    border: {int(t.get('open_themes_btn_border_width', 0))}px solid {t.get('open_themes_btn_border', 'transparent')};
+                    border-radius: {int(t.get('open_themes_btn_radius', 3))}px;
                 }}
-                QPushButton:hover {{
-                    background-color: {accent_hover};
+                QPushButton:hover {{ background-color: {t.get('open_themes_btn_hover', '#2980b9')}; }}
+                QPushButton:pressed {{ background-color: {t.get('open_themes_btn_pressed', '#1f5f8f')}; }}
+            """)
+
+        if self.refresh_releases_button:
+            self.refresh_releases_button.setStyleSheet(f"""
+                QPushButton {{
+                    font-size: {int(t.get('refresh_releases_btn_font_size', 13))}px;
+                    font-weight: {t.get('refresh_releases_btn_font_weight', 'normal')};
+                    background-color: {t.get('refresh_releases_btn_bg', '#4CAF50')};
+                    color: {t.get('refresh_releases_btn_text', 'white')};
+                    padding: 6px 15px;
+                    border: {int(t.get('refresh_releases_btn_border_width', 0))}px solid {t.get('refresh_releases_btn_border', 'transparent')};
+                    border-radius: {int(t.get('refresh_releases_btn_radius', 3))}px;
                 }}
+                QPushButton:hover {{ background-color: {t.get('refresh_releases_btn_hover', '#45a049')}; }}
+                QPushButton:pressed {{ background-color: {t.get('refresh_releases_btn_pressed', '#3d8b40')}; }}
             """)
 
         if self.add_repo_button:
-            accent = t.get("accent", "#4CAF50")
-            accent_hover = t.get("accent_hover", "#45a049")
             self.add_repo_button.setStyleSheet(f"""
                 QPushButton {{
-                    font-size: 13px;
-                    background-color: {accent};
-                    color: white;
+                    font-size: {int(t.get('add_repo_btn_font_size', 13))}px;
+                    font-weight: {t.get('add_repo_btn_font_weight', 'normal')};
+                    background-color: {t.get('add_repo_btn_bg', '#4CAF50')};
+                    color: {t.get('add_repo_btn_text', 'white')};
                     padding: 6px 15px;
-                    border: none;
-                    border-radius: 3px;
+                    border: {int(t.get('add_repo_btn_border_width', 0))}px solid {t.get('add_repo_btn_border', 'transparent')};
+                    border-radius: {int(t.get('add_repo_btn_radius', 3))}px;
                 }}
-                QPushButton:hover {{
-                    background-color: {accent_hover};
-                }}
+                QPushButton:hover {{ background-color: {t.get('add_repo_btn_hover', '#45a049')}; }}
+                QPushButton:pressed {{ background-color: {t.get('add_repo_btn_pressed', '#3d8b40')}; }}
             """)
 
         if self.check_token_button:
             self.check_token_button.setStyleSheet(f"""
                 QPushButton {{
-                    font-size: 13px;
-                    background-color: #2196F3;
-                    color: white;
+                    font-size: {int(t.get('check_token_btn_font_size', 13))}px;
+                    font-weight: {t.get('check_token_btn_font_weight', 'normal')};
+                    background-color: {t.get('check_token_btn_bg', '#2196F3')};
+                    color: {t.get('check_token_btn_text', 'white')};
                     padding: 6px 15px;
-                    border: none;
-                    border-radius: 3px;
+                    border: {int(t.get('check_token_btn_border_width', 0))}px solid {t.get('check_token_btn_border', 'transparent')};
+                    border-radius: {int(t.get('check_token_btn_radius', 3))}px;
                 }}
-                QPushButton:hover {{
-                    background-color: #1976D2;
-                }}
+                QPushButton:hover {{ background-color: {t.get('check_token_btn_hover', '#1976D2')}; }}
+                QPushButton:pressed {{ background-color: {t.get('check_token_btn_pressed', '#0D47A1')}; }}
             """)
 
-        if self.refresh_releases_button:
-            accent = t.get("accent", "#4CAF50")
-            accent_hover = t.get("accent_hover", "#45a049")
-            self.refresh_releases_button.setStyleSheet(f"""
+        if self.reload_theme_btn:
+            self.reload_theme_btn.setStyleSheet(f"""
                 QPushButton {{
-                    font-size: 13px;
-                    background-color: {accent};
-                    color: white;
-                    padding: 6px 15px;
-                    border: none;
-                    border-radius: 3px;
+                    font-size: {int(t.get('reload_theme_btn_font_size', 16))}px;
+                    font-weight: bold;
+                    background-color: {t.get('reload_theme_btn_bg', 'white')};
+                    color: {t.get('reload_theme_btn_text', 'black')};
+                    border: {int(t.get('reload_theme_btn_border_width', 1))}px solid {t.get('reload_theme_btn_border', '#CCC')};
+                    border-radius: {int(t.get('reload_theme_btn_radius', 3))}px;
                 }}
                 QPushButton:hover {{
-                    background-color: {accent_hover};
+                    background-color: {t.get('reload_theme_btn_hover', '#3498db')};
+                    color: {t.get('reload_theme_btn_hover_text', 'white')};
+                    border: {int(t.get('reload_theme_btn_border_width', 1))}px solid {t.get('reload_theme_btn_hover', '#3498db')};
+                }}
+                QPushButton:pressed {{
+                    background-color: {t.get('reload_theme_btn_pressed', '#2980b9')};
+                    color: {t.get('reload_theme_btn_hover_text', 'white')};
+                }}
+                QToolTip {{
+                    background-color: {t.get('tooltip_bg', 'white')};
+                    color: {t.get('tooltip_text', 'black')};
+                    border: {int(t.get('tooltip_border_width', 1))}px solid {t.get('tooltip_border', '#CCC')};
+                    padding: 6px 10px;
+                    border-radius: {int(t.get('tooltip_radius', 4))}px;
                 }}
             """)
 
@@ -1534,9 +1424,7 @@ class UIComponents(QObject):
         th_layout.setContentsMargins(20, 15, 20, 15)
         th_layout.setSpacing(10)
 
-        theme_desc = QLabel(
-            "Внешний вид лаунчера."
-        )
+        theme_desc = QLabel("Внешний вид лаунчера.")
         theme_desc.setWordWrap(True)
         self.settings_labels.append(theme_desc)
         th_layout.addWidget(theme_desc)
@@ -1868,19 +1756,29 @@ class UIComponents(QObject):
 
     def _apply_flmods_theme(self):
         t = self.theme
-        self.FL_MODS.setStyleSheet(f"""
-            background-color: {t.get('settings_bg', '#f5f5f5')};
-            border-radius: 0px;
-        """)
-        self.flmods_header_strip.setStyleSheet(f"background-color: {t.get('flmods_header', '#00aaff')};")
+        flmods_blur = int(t.get("flmods_blur", 0))
+
+        if flmods_blur > 0:
+            self.FL_MODS.setStyleSheet("background: transparent;")
+        else:
+            self.FL_MODS.setStyleSheet(f"""
+                background-color: {t.get('flmods_bg', t.get('settings_bg', '#f5f5f5'))};
+                border-radius: 0px;
+            """)
+        self.flmods_header_strip.setStyleSheet(
+            f"background-color: {t.get('flmods_header', '#00aaff')};"
+        )
         self.flmods_header_label.setStyleSheet(f"""
-            font-size: 20px;
-            font-weight: bold;
-            color: {t.get('flmods_text', 'white')};
+            font-size: {int(t.get('flmods_header_size', 20))}px;
+            font-weight: {t.get('flmods_header_weight', 'bold')};
+            color: {t.get('flmods_header_text', 'white')};
             background: transparent;
             border: none;
         """)
-        self.flmods_version_label.setStyleSheet(f"color: {t.get('flmods_text', 'white')}; font-size: 14px; margin-left: 30px; background: transparent; border: none;")
+        self.flmods_version_label.setStyleSheet(
+            f"color: {t.get('flmods_header_text', 'white')}; "
+            f"font-size: 14px; margin-left: 30px; background: transparent; border: none;"
+        )
         self.mods_version_combo.setStyleSheet(f"""
             QComboBox {{
                 background-color: {t.get('combo_bg', 'white')};
@@ -1899,18 +1797,18 @@ class UIComponents(QObject):
                 outline: none;
             }}
         """)
-        self.flmods_close_btn.setStyleSheet("""
-            QPushButton {
+        self.flmods_close_btn.setStyleSheet(f"""
+            QPushButton {{
                 background-color: transparent;
-                color: white;
+                color: {t.get('flmods_header_text', 'white')};
                 font-size: 20px;
                 font-weight: bold;
                 border: none;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: rgba(255, 255, 255, 0.2);
                 border-radius: 15px;
-            }
+            }}
         """)
 
         if self.mods_widget is not None:
@@ -1965,12 +1863,16 @@ class UIComponents(QObject):
     def _add_repository_to_list(self, repo):
         t = self.theme
         repo_widget = QWidget()
-        repo_widget.setStyleSheet(f"background-color: {t.get('group_title_bg', '#f5f5f5')}; border-radius: 3px; border: none;")
+        repo_widget.setStyleSheet(
+            f"background-color: {t.get('group_title_bg', '#f5f5f5')}; border-radius: 3px; border: none;"
+        )
         repo_layout = QHBoxLayout(repo_widget)
         repo_layout.setContentsMargins(10, 4, 10, 4)
 
         repo_label = QLabel(repo)
-        repo_label.setStyleSheet(f"font-size: 13px; border: none; background: transparent; color: {t.get('group_title_text', '#333')};")
+        repo_label.setStyleSheet(
+            f"font-size: 13px; border: none; background: transparent; color: {t.get('group_title_text', '#333')};"
+        )
         repo_layout.addWidget(repo_label)
 
         delete_button = QPushButton("×")
@@ -2023,21 +1925,26 @@ class UIComponents(QObject):
         if layout.get("mode", "bar") == "centered":
             self.bar.raise_()
 
+        self._update_all_blurs()
+
     def hide_settings(self):
         self._settings_open = False
         self._apply_layout()
         self._update_settings_backdrop()
         self.settings_panel.hide()
+        self._update_all_blurs()
 
     def show_flmods(self):
         self.FL_MODS_background.show()
         self.FL_MODS.show()
         self.FL_MODS_background.raise_()
         self.FL_MODS.raise_()
+        self._update_all_blurs()
 
     def hide_flmods(self):
         self.FL_MODS_background.hide()
         self.FL_MODS.hide()
+        self._update_all_blurs()
 
     def update_token_status(self, status_text, color_code):
         self.token_status_label.setText(status_text)
