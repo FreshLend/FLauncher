@@ -15,40 +15,40 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
           architecture: 'x64'
-      
+
       - name: Install deps
         run: |
           pip install pyinstaller
           if (Test-Path requirements.txt) { pip install -r requirements.txt; }
           choco install upx -y
-      
+
       - name: Build
         run: pyinstaller build.spec
         shell: pwsh
-      
+
       - name: Get version
         id: version
         shell: pwsh
         run: |
-          $content = Get-Content -Path build.spec -Raw
+          $content = Get-Content -Path src/utils.py -Raw
           $pattern = 'VERSION\s*=\s*[''"]([^''"]+)[''"]'
           $match = [regex]::Match($content, $pattern)
           $VERSION = if ($match.Success) { $match.Groups[1].Value } else { "${{ github.event.inputs.version }}" }
           echo "VERSION=$VERSION" >> $env:GITHUB_OUTPUT
-      
+
       - name: Rename
         run: |
           $file = Get-ChildItem -Path dist -Filter "FLauncher-*.exe" | Select-Object -First 1
           $newname = "FLauncher-${{ steps.version.outputs.VERSION }}_win64.exe"
           Move-Item -Path $file.FullName -Destination "dist/$newname" -Force
         shell: pwsh
-      
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -61,63 +61,78 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-      
+
       - name: Install deps
         run: |
           sudo apt-get update
           sudo apt-get install -y libfuse2 upx
           pip install pyinstaller
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-      
+
       - name: Build
         run: pyinstaller build.spec
-      
+
       - name: Get version
         id: version
         run: |
-          VERSION=$(grep -o "VERSION = ['\"]*[^'\"]*['\"]*" build.spec | grep -o "['\"][^'\"]*['\"]" | tr -d "'\"")
+          VERSION=$(grep -oP 'VERSION\s*=\s*["'"'"']\K[^"'"'"']+' src/utils.py | head -1)
           echo "VERSION=${VERSION:-${{ github.event.inputs.version }}}" >> $GITHUB_OUTPUT
-      
+
       - name: Prepare binary
         run: |
           BINARY=$(find dist -name "FLauncher-*" -type f | head -1)
           cp "$BINARY" dist/flauncher
           chmod +x dist/flauncher
-      
+
       - name: Create AppImage
         run: |
           wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
-          
+
           mkdir -p AppDir/usr/bin
           cp dist/flauncher AppDir/usr/bin/flauncher
-          
-          cat > AppDir/flauncher.desktop <<EOF
+
+          cat > AppDir/flauncher.desktop <<'EOF'
           [Desktop Entry]
           Name=FLauncher
+          Comment=VoxelCore Launcher
           Exec=flauncher
           Icon=flauncher
+          Terminal=false
           Type=Application
           Categories=Game;
+          StartupWMClass=FLauncher
           EOF
-          
-          [ -f src/ui/icon.png ] && cp src/ui/icon.png AppDir/flauncher.png
-          
-          cat > AppDir/AppRun <<EOF
+
+          ICON_SRC=""
+          if [ -f src/ui/images/icon.png ]; then
+            ICON_SRC="src/ui/images/icon.png"
+          elif [ -f src/ui/icon.png ]; then
+            ICON_SRC="src/ui/icon.png"
+          fi
+
+          if [ -z "$ICON_SRC" ]; then
+            echo "Не найдена иконка icon.png ни в src/ui/images/, ни в src/ui/"
+            exit 1
+          fi
+
+          cp "$ICON_SRC" AppDir/flauncher.png
+
+          cat > AppDir/AppRun <<'EOF'
           #!/bin/bash
-          HERE="\$(dirname "\$(readlink -f "\$0")")"
-          exec "\$HERE/usr/bin/flauncher" "\$@"
+          HERE="$(dirname "$(readlink -f "$0")")"
+          exec "$HERE/usr/bin/flauncher" "$@"
           EOF
           chmod +x AppDir/AppRun
-          
+
           ARCH=x86_64 ./appimagetool-x86_64.AppImage AppDir
-          mv FLauncher-*.AppImage FLauncher-${{ steps.version.outputs.VERSION }}_x86-64.AppImage
-      
+          mv FLauncher-*.AppImage "FLauncher-${{ steps.version.outputs.VERSION }}_x86-64.AppImage"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -130,27 +145,27 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-      
+
       - name: Install deps
         run: |
           pip install pyinstaller
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           brew install upx
-      
+
       - name: Build
         run: pyinstaller build.spec
-      
+
       - name: Get version
         id: version
         run: |
-          VERSION="${{ github.event.inputs.version }}"
-          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
-      
+          VERSION=$(grep -oE 'VERSION[[:space:]]*=[[:space:]]*"[^"]+"' src/utils.py | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "VERSION=${VERSION:-${{ github.event.inputs.version }}}" >> $GITHUB_OUTPUT
+
       - name: Create DMG
         run: |
           APP_BUNDLE=$(find dist -name "*.app" -type d | head -n 1)
@@ -161,7 +176,7 @@ jobs:
             -srcfolder dmg_temp \
             -ov -format UDZO \
             "FLauncher-${{ steps.version.outputs.VERSION }}_macos.dmg"
-      
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
