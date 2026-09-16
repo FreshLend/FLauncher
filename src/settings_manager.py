@@ -46,11 +46,13 @@ class SettingsManager:
         self.app_data_path.mkdir(parents=True, exist_ok=True)
         self.downloads_path.mkdir(parents=True, exist_ok=True)
         self.settings_path.parent.mkdir(parents=True, exist_ok=True)
+        (self.settings_path.parent / "themes").mkdir(parents=True, exist_ok=True)
     
     def _load_settings(self):
         default_settings = {
             "github_repos": [],
             "discord_rpc_enabled": True,
+            "theme": "tlauncher",
             "launch_params": {
                 "additional_args": ""
             },
@@ -87,6 +89,11 @@ class SettingsManager:
         
         with open(self.settings_path, 'w', encoding='utf-8') as f:
             json.dump(settings, f, indent=4)
+        
+        try:
+            os.chmod(self.settings_path, 0o600)
+        except Exception:
+            pass
     
     def add_github_repo(self, repo):
         if repo not in self.settings["github_repos"]:

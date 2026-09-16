@@ -10,6 +10,7 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtCore import Qt, QSize, QUrl, QObject, pyqtSignal, QRectF
 from utils import resource_path, MAIN_REPO, VERSION
+from layouts import get_layout
 from flmods import ModsWidget
 
 
@@ -33,42 +34,60 @@ def _platform_name():
 
 
 class FullWidthTabWidget(QTabWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, theme=None):
         super().__init__(parent)
+        self.theme = theme or {}
         self.tabBar().setExpanding(True)
         self.tabBar().setDrawBase(False)
+        self._update_style()
+
+    def set_theme(self, theme):
+        self.theme = theme
         self._update_style()
 
     def _update_style(self):
         count = max(self.count(), 1)
         w = max(self.width() // count - 3, 60)
+        t = self.theme
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setAutoFillBackground(False)
         self.setStyleSheet(f"""
+            QTabWidget {{
+                background: transparent;
+                border: none;
+            }}
             QTabWidget::pane {{
                 border: none;
-                background-color: #f5f5f5;
+                background: transparent;
+            }}
+            QTabWidget > QStackedWidget {{
+                background: transparent;
+            }}
+            QTabWidget > QStackedWidget > QWidget {{
+                background: transparent;
             }}
             QTabBar {{
-                background-color: #f5f5f5;
+                background: transparent;
             }}
             QTabBar::tab {{
-                background-color: #E4E4E4;
+                background-color: {t.get('settings_tab_bg', '#E4E4E4')};
                 border: none;
                 padding: 10px 0px;
                 margin: 0px 2px 0px 0px;
                 font-size: 14px;
-                color: #333;
+                color: {t.get('settings_tab_text', '#333')};
                 width: {w}px;
             }}
             QTabBar::tab:selected {{
-                background-color: #0086c7;
-                color: white;
+                background-color: {t.get('settings_tab_active', '#0086c7')};
+                color: {t.get('settings_tab_active_text', 'white')};
                 font-weight: bold;
             }}
             QTabBar::tab:!selected {{
-                background-color: #E4E4E4;
+                background-color: {t.get('settings_tab_bg', '#E4E4E4')};
             }}
             QTabBar::tab:hover:!selected {{
-                background-color: #D8D8D8;
+                background-color: {t.get('settings_tab_hover', '#D8D8D8')};
             }}
         """)
 
@@ -82,12 +101,17 @@ class FullWidthTabWidget(QTabWidget):
 
 
 class ToggleSwitch(QPushButton):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, theme=None):
         super().__init__(parent)
+        self.theme = theme or {}
         self.setCheckable(True)
         self.setFixedSize(48, 26)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setStyleSheet("QPushButton { background: transparent; border: none; }")
+
+    def set_theme(self, theme):
+        self.theme = theme
+        self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -99,10 +123,12 @@ class ToggleSwitch(QPushButton):
         track_path = QPainterPath()
         track_path.addRoundedRect(rect, radius, radius)
 
+        accent = self.theme.get("accent", "#4CAF50")
+
         if self.isChecked():
-            color = QColor("#4CAF50")
+            color = QColor(accent)
             if self.underMouse():
-                color = QColor("#45a049")
+                color = color.lighter(110)
         else:
             color = QColor("#BDBDBD")
             if self.underMouse():
@@ -130,9 +156,14 @@ class ToggleSwitch(QPushButton):
 
 
 class ArrowComboBox(QComboBox):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, theme=None):
         super().__init__(parent)
+        self.theme = theme or {}
         self._popup_open = False
+
+    def set_theme(self, theme):
+        self.theme = theme
+        self.update()
 
     def showPopup(self):
         super().showPopup()
@@ -149,16 +180,23 @@ class ArrowComboBox(QComboBox):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         rect = self.rect()
+        t = self.theme
 
+        bg_color = QColor(t.get("combo_bg", "white"))
+        text_color = QColor(t.get("combo_text", "#1e1e1e"))
+        arrow_color = QColor(t.get("combo_arrow", "#1e1e1e"))
+        focus_color = QColor(t.get("combo_focus", "#3498db"))
+
+        radius = int(self.theme.get("combo_radius", 5))
         bg_path = QPainterPath()
-        bg_path.addRoundedRect(QRectF(rect), 5, 5)
-        painter.fillPath(bg_path, QColor(255, 255, 255))
+        bg_path.addRoundedRect(QRectF(rect), radius, radius)
+        painter.fillPath(bg_path, bg_color)
 
         font = self.font()
         font.setPointSize(14)
         font.setBold(True)
         painter.setFont(font)
-        painter.setPen(QColor(30, 30, 30))
+        painter.setPen(text_color)
 
         text_rect = rect.adjusted(12, 0, -42, 0)
         painter.drawText(
@@ -168,7 +206,7 @@ class ArrowComboBox(QComboBox):
         )
 
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(30, 30, 30))
+        painter.setBrush(arrow_color)
 
         cx = rect.width() - 20
         cy = rect.height() // 2
@@ -187,17 +225,24 @@ class ArrowComboBox(QComboBox):
         painter.drawPath(arrow)
 
         if self.hasFocus():
-            painter.setPen(QPen(QColor(52, 152, 219), 2))
+            painter.setPen(QPen(focus_color, 2))
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawRoundedRect(QRectF(rect).adjusted(1, 1, -1, -1), 5, 5)
+            painter.drawRoundedRect(QRectF(rect).adjusted(1, 1, -1, -1), radius, radius)
 
 
 class ReleaseDisplayWidget(QWidget):
-    def __init__(self, release_data, parent=None):
+    def __init__(self, release_data, parent=None, theme=None):
         super().__init__(parent)
-        self.setup_ui(release_data)
+        self.theme = theme or {}
+        self.release_data = release_data
+        self.version_label = None
+        self.date_label = None
+        self.body_label = None
+        self._build()
+        self._apply_styles()
 
-    def setup_ui(self, data):
+    def _build(self):
+        data = self.release_data
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
@@ -206,45 +251,62 @@ class ReleaseDisplayWidget(QWidget):
         header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.setSpacing(10)
 
-        version_label = QLabel(
-            f'<a href="{data["release_url"]}" style="color: #0066cc; text-decoration: none;">'
-            f'VoxelCore {data["version"]}</a>'
-        )
-        version_label.setStyleSheet("""
-            font-size: 22px;
-            font-weight: bold;
-            color: #222;
-            background: transparent;
-            border: none;
-        """)
-        version_label.setOpenExternalLinks(True)
+        self.version_label = QLabel()
+        self.version_label.setOpenExternalLinks(True)
 
-        date_label = QLabel(data["date"])
-        date_label.setStyleSheet("""
-            font-size: 12px;
-            color: #888;
-            background: transparent;
-            border: none;
-        """)
+        self.date_label = QLabel(data.get("date", ""))
 
-        header_layout.addWidget(version_label)
+        header_layout.addWidget(self.version_label)
         header_layout.addStretch(1)
-        header_layout.addWidget(date_label)
+        header_layout.addWidget(self.date_label)
         layout.addLayout(header_layout)
 
         if data.get('body_html'):
-            release_info_label = QLabel()
-            release_info_label.setOpenExternalLinks(True)
-            release_info_label.setText(data['body_html'])
-            release_info_label.setWordWrap(True)
-            release_info_label.setStyleSheet("""
-                font-size: 13px;
-                line-height: 1.5;
-                color: #333;
+            self.body_label = QLabel()
+            self.body_label.setOpenExternalLinks(True)
+            self.body_label.setText(data['body_html'])
+            self.body_label.setWordWrap(True)
+            layout.addWidget(self.body_label)
+
+    def _apply_styles(self):
+        t = self.theme
+        data = self.release_data
+        version_color = t.get("release_version", "#0066cc")
+
+        if self.version_label:
+            self.version_label.setText(
+                f'<a href="{data.get("release_url", "#")}" '
+                f'style="color: {version_color}; text-decoration: none;">'
+                f'VoxelCore {data.get("version", "")}</a>'
+            )
+            self.version_label.setStyleSheet(f"""
+                font-size: 22px;
+                font-weight: bold;
+                color: {t.get('release_text', '#222')};
                 background: transparent;
                 border: none;
             """)
-            layout.addWidget(release_info_label)
+
+        if self.date_label:
+            self.date_label.setStyleSheet(f"""
+                font-size: 12px;
+                color: {t.get('release_date', '#888')};
+                background: transparent;
+                border: none;
+            """)
+
+        if self.body_label:
+            self.body_label.setStyleSheet(f"""
+                font-size: 13px;
+                line-height: 1.5;
+                color: {t.get('release_text', '#333')};
+                background: transparent;
+                border: none;
+            """)
+
+    def apply_theme(self, theme):
+        self.theme = theme
+        self._apply_styles()
 
 
 class UIComponents(QObject):
@@ -267,11 +329,17 @@ class UIComponents(QObject):
     add_repo_clicked = pyqtSignal()
     remove_repo_clicked = pyqtSignal(str)
     mods_target_version_changed = pyqtSignal(str)
+    theme_selected = pyqtSignal(str)
+    open_themes_folder_clicked = pyqtSignal()
 
-    def __init__(self, main_window, settings_manager):
+    def __init__(self, main_window, settings_manager, theme_manager):
         super().__init__()
         self.main = main_window
         self.settings_manager = settings_manager
+        self.theme_manager = theme_manager
+        self.theme = theme_manager.current
+
+        self.bar = None
         self.input_field = None
         self.version_combo = None
         self.progress_bar = None
@@ -282,12 +350,20 @@ class UIComponents(QObject):
         self.reload_button = None
         self.folder_button = None
         self.settings_button = None
-        self.bar = None
         self.release_panel = None
         self.release_layout = None
         self.scroll_area = None
+        self.info_panel = None
+        self.info_buttons = []
+        self.bottom_platform_label = None
+        self.bottom_version_label = None
+        self.header_title = None
+        self.header_subtitle = None
         self.settings_background = None
         self.settings_panel = None
+        self.settings_header_strip = None
+        self.settings_header_label = None
+        self.settings_close_btn = None
         self.tab_widget = None
         self.additional_args_input = None
         self.discord_toggle = None
@@ -296,6 +372,10 @@ class UIComponents(QObject):
         self.repos_layout = None
         self.FL_MODS_background = None
         self.FL_MODS = None
+        self.flmods_header_strip = None
+        self.flmods_header_label = None
+        self.flmods_version_label = None
+        self.flmods_close_btn = None
         self.artifacts_toggle = None
         self.artifacts_count_spin = None
         self.artifacts_count_group = None
@@ -306,7 +386,16 @@ class UIComponents(QObject):
         self.token_status_label = None
         self.mods_widget = None
         self.mods_version_combo = None
-        self.version_info_label = None
+        self.theme_combo = None
+        self.open_themes_button = None
+        self.launch_params_label = None
+        self._settings_open = False
+        self.launch_tab = None
+        self.flauncher_tab = None
+        self.privacy_tab = None
+        self.group_boxes = []
+        self.add_repo_button = None
+        self.settings_labels = []
 
     def setup_all(self):
         self.set_background()
@@ -315,6 +404,192 @@ class UIComponents(QObject):
         self.add_info_panel()
         self.add_settings_panel()
         self.add_fl_mods_panel()
+        self._apply_layout()
+
+    def apply_theme(self):
+        self.theme = self.theme_manager.current
+        self._apply_bar_theme()
+        self._apply_release_panel_theme()
+        self._apply_info_panel_theme()
+        self._apply_settings_panel_theme()
+        self._apply_flmods_theme()
+        self._refresh_releases_display()
+        self._apply_layout()
+        self._update_settings_backdrop()
+
+        if getattr(self, "_settings_open", False):
+            self.settings_background.raise_()
+            self.settings_panel.raise_()
+            if self.theme.get("layout", {}).get("mode", "bar") == "centered":
+                self.bar.raise_()
+
+        if self.version_combo:
+            self.version_combo.set_theme(self.theme)
+        if self.artifacts_toggle:
+            self.artifacts_toggle.set_theme(self.theme)
+        if self.discord_toggle:
+            self.discord_toggle.set_theme(self.theme)
+
+    def _refresh_releases_display(self):
+        for i in range(self.release_layout.count()):
+            item = self.release_layout.itemAt(i)
+            w = item.widget()
+            if isinstance(w, ReleaseDisplayWidget):
+                w.apply_theme(self.theme)
+
+    def _apply_layout(self):
+        t = self.theme
+        layout = t.get("layout", {})
+        mode = layout.get("mode", "bar")
+        W = self.main.width()
+        H = self.main.height()
+        settings_open = getattr(self, "_settings_open", False)
+        settings_mode = layout.get("settings_mode", "fullscreen")
+
+        if mode == "centered":
+            panel_w = int(layout.get("panel_w", 380))
+            panel_h = int(layout.get("panel_h", 400))
+            panel_y = int(layout.get("panel_y", 30))
+
+            if settings_open and settings_mode == "right":
+                left_margin = int(layout.get("panel_left_margin", 30))
+                bar_x = left_margin
+                bar_y = panel_y
+            elif settings_open and settings_mode == "left":
+                right_margin = int(layout.get("panel_right_margin", 30))
+                bar_x = W - panel_w - right_margin
+                bar_y = panel_y
+            else:
+                bar_x = (W - panel_w) // 2
+                bar_y = panel_y
+            bar_w = panel_w
+            bar_h = panel_h
+            content_y = 0
+            content_h = H
+        else:
+            bar_h = int(layout.get("bar_height", 90))
+            bar_pos = layout.get("bar_position", "bottom")
+            if bar_pos == "top":
+                bar_x = 0
+                bar_y = 0
+                content_y = bar_h
+            else:
+                bar_x = 0
+                bar_y = H - bar_h
+                content_y = 0
+            bar_w = W
+            content_h = H - bar_h
+
+        self.bar.setGeometry(bar_x, bar_y, bar_w, bar_h)
+
+        def resolve(spec, parent_w, parent_h):
+            x, y, w, h = spec
+            if w < 0:
+                w = parent_w + w
+            if h < 0:
+                h = parent_h + h
+            return int(x), int(y), int(w), int(h)
+
+        def set_widget(widget, key, parent_w, parent_h, base_y=0):
+            if widget is None or key not in layout:
+                return
+            x, y, w, h = resolve(layout[key], parent_w, parent_h)
+            widget.setGeometry(x, base_y + y, w, h)
+
+        set_widget(self.input_field, "nick_input", bar_w, bar_h)
+        set_widget(self.version_combo, "version_combo", bar_w, bar_h)
+        set_widget(self.play_button, "play_button", bar_w, bar_h)
+        set_widget(self.flm_button, "flm_button", bar_w, bar_h)
+        set_widget(self.reload_button, "reload_button", bar_w, bar_h)
+        set_widget(self.folder_button, "folder_button", bar_w, bar_h)
+        set_widget(self.settings_button, "settings_button", bar_w, bar_h)
+
+        for btn in (self.flm_button,):
+            if btn is not None:
+                s = btn.size()
+                m = min(s.width(), s.height())
+                sz = max(int(m * 0.85), 16)
+                btn.setIconSize(QSize(sz, sz))
+
+        for btn in (self.reload_button, self.folder_button, self.settings_button):
+            if btn is not None:
+                s = btn.size()
+                m = min(s.width(), s.height())
+                sz = max(int(m * 0.55), 16)
+                btn.setIconSize(QSize(sz, sz))
+
+        if "progress_bar" in layout:
+            x, y, w, h = resolve(layout["progress_bar"], bar_w, bar_h)
+            self.progress_bar.setGeometry(x, y, w, h)
+
+        if "progress_label" in layout:
+            x, y, w, h = resolve(layout["progress_label"], bar_w, bar_h)
+            self.download_info_label.setGeometry(x, y, w, h)
+        elif "progress_bar" in layout:
+            x, y, w, h = resolve(layout["progress_bar"], bar_w, bar_h)
+            self.download_info_label.setGeometry(x, y, w, h)
+
+        set_widget(self.cancel_button, "cancel_button", bar_w, bar_h)
+
+        hide_releases = layout.get("hide_releases", False)
+        if hide_releases:
+            self.scroll_area.hide()
+        else:
+            self.scroll_area.show()
+            if "release_scroll" in layout:
+                x, y, w, h = resolve(layout["release_scroll"], W, content_h)
+                self.scroll_area.setGeometry(x, content_y + y, w, h)
+
+        hide_info = layout.get("hide_info", False)
+        if hide_info:
+            self.info_panel.hide()
+        else:
+            self.info_panel.show()
+            if "info_panel" in layout:
+                x, y, w, h = resolve(layout["info_panel"], W, content_h)
+                self.info_panel.setGeometry(x, content_y + y, w, h)
+
+        side_settings = (
+            mode == "centered"
+            and settings_mode in ("right", "left")
+            and settings_open
+        )
+
+        if side_settings:
+            right_w = int(layout.get("settings_right_w", 640))
+            right_margin = int(layout.get("settings_right_margin", 30))
+            top_m = int(layout.get("settings_top_margin", 30))
+            bottom_m = int(layout.get("settings_bottom_margin", 30))
+            if settings_mode == "right":
+                sx = W - right_w - right_margin
+            else:
+                sx = right_margin
+            sy = top_m
+            sw = right_w
+            sh = H - top_m - bottom_m
+            self.settings_panel.setGeometry(sx, sy, sw, sh)
+            self.settings_header_strip.setGeometry(0, 0, sw, 50)
+            self.settings_close_btn.move(sw - 50, 10)
+            self.tab_widget.setGeometry(0, 50, sw, sh - 50)
+        else:
+            self.settings_panel.setGeometry(0, content_y, W, content_h)
+            self.settings_header_strip.setGeometry(0, 0, W, 50)
+            self.settings_close_btn.move(W - 50, 10)
+            self.tab_widget.setGeometry(0, 50, W, content_h - 50)
+
+        backdrop = layout.get("settings_backdrop", "dim")
+        if side_settings and backdrop != "none":
+            self.settings_background.setGeometry(0, 0, W, H)
+        else:
+            self.settings_background.setGeometry(0, content_y, W, content_h)
+
+        self.FL_MODS_background.setGeometry(0, content_y, W, content_h)
+        self.FL_MODS.setGeometry(0, content_y, W, content_h)
+        self.flmods_header_strip.setGeometry(0, 0, W, 50)
+        self.flmods_close_btn.move(W - 50, 10)
+
+        if mode == "centered":
+            self.bar.raise_()
 
     def set_background(self):
         self.main.setAutoFillBackground(True)
@@ -325,46 +600,19 @@ class UIComponents(QObject):
         self.main.setPalette(palette)
 
     def add_bar(self):
+        t = self.theme
         self.bar = QWidget(self.main)
-        self.bar.setGeometry(0, self.main.height() - 90, self.main.width(), 90)
-        self.bar.setStyleSheet("background-color: rgba(113, 169, 76, 0.9);")
 
         self.input_field = QLineEdit(self.bar)
-        self.input_field.setGeometry(10, 20, 200, 60)
-        self.input_field.setStyleSheet("""
-            QLineEdit {
-                background-color: white;
-                color: black;
-                font-size: 18px;
-                font-weight: bold;
-                border-radius: 5px;
-                padding: 5px;
-                border: none;
-            }
-        """)
         self.input_field.setPlaceholderText("Введите ник...")
         self.input_field.textChanged.connect(self.username_changed)
 
-        self.version_combo = ArrowComboBox(self.bar)
-        self.version_combo.setGeometry(220, 20, 300, 60)
-        self.version_combo.setStyleSheet("""
-            QComboBox QAbstractItemView {
-                border: 1px solid #aaa;
-                background-color: white;
-                color: black;
-                selection-background-color: #3498db;
-                selection-color: white;
-                outline: none;
-                padding: 4px;
-                min-width: 260px;
-            }
-        """)
+        self.version_combo = ArrowComboBox(self.bar, theme=t)
         self.version_combo.currentIndexChanged.connect(
             lambda i: self.version_selected.emit(self.version_combo.currentText()) if i >= 0 else None
         )
 
         self.progress_bar = QProgressBar(self.bar)
-        self.progress_bar.setGeometry(10, 0, self.main.width() - 20, 20)
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self.progress_bar.setTextVisible(False)
@@ -381,13 +629,10 @@ class UIComponents(QObject):
         """)
 
         self.download_info_label = QLabel(self.bar)
-        self.download_info_label.setGeometry(10, 0, self.main.width() - 20, 20)
-        self.download_info_label.setStyleSheet("font-size: 12px; color: black;")
         self.download_info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.download_info_label.setText("")
 
         self.cancel_button = QPushButton("Отмена", self.bar)
-        self.cancel_button.setGeometry(1000, 0, 80, 20)
         self.cancel_button.setStyleSheet("""
             QPushButton {
                 background-color: #ff4444;
@@ -407,127 +652,155 @@ class UIComponents(QObject):
         self.cancel_button.hide()
 
         self.play_button = QPushButton("Войти в игру", self.bar)
-        self.play_button.setGeometry(530, 20, 300, 60)
-        self.play_button.setStyleSheet("""
-            QPushButton {
-                background-color: rgb(236, 193, 63);
-                color: white;
-                font-size: 18px;
-                font-weight: bold;
-                border-radius: 5px;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: rgb(246, 203, 73);
-            }
-            QPushButton:pressed {
-                background-color: rgb(226, 183, 53);
-            }
-        """)
         self.play_button.clicked.connect(self.play_clicked)
 
         icon_flm = QIcon(resource_path("ui/FLM.png"))
         self.flm_button = QPushButton(self.bar)
         self.flm_button.setIcon(icon_flm)
         self.flm_button.setIconSize(QSize(60, 60))
-        self.flm_button.setGeometry(835, 20, 60, 60)
-        self.flm_button.setStyleSheet("""
-            QPushButton {
-                border: none;
-                background-color: transparent;
-                padding: 0;
-                outline: none;
-            }
-            QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.1);
-                border-radius: 5px;
-            }
-        """)
         self.flm_button.clicked.connect(self.flm_clicked)
 
         icon_reload = QIcon(resource_path("ui/reload.png"))
         self.reload_button = QPushButton(self.bar)
         self.reload_button.setIcon(icon_reload)
         self.reload_button.setIconSize(QSize(30, 30))
-        self.reload_button.setGeometry(895, 20, 60, 60)
-        self.reload_button.setStyleSheet("""
-            QPushButton {
-                border: none;
-                background-color: transparent;
-                padding: 0;
-                outline: none;
-            }
-            QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.1);
-                border-radius: 5px;
-            }
-        """)
         self.reload_button.clicked.connect(self.reload_clicked)
 
         icon_folder = QIcon(resource_path("ui/folder.png"))
         self.folder_button = QPushButton(self.bar)
         self.folder_button.setIcon(icon_folder)
         self.folder_button.setIconSize(QSize(30, 30))
-        self.folder_button.setGeometry(965, 20, 60, 60)
-        self.folder_button.setStyleSheet("""
-            QPushButton {
-                border: none;
-                background-color: transparent;
-                padding: 0;
-                outline: none;
-            }
-            QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.1);
-                border-radius: 5px;
-            }
-        """)
         self.folder_button.clicked.connect(self.folder_clicked)
 
         icon_settings = QIcon(resource_path("ui/settings.png"))
         self.settings_button = QPushButton(self.bar)
         self.settings_button.setIcon(icon_settings)
         self.settings_button.setIconSize(QSize(30, 30))
-        self.settings_button.setGeometry(1035, 20, 60, 60)
-        self.settings_button.setStyleSheet("""
-            QPushButton {
+        self.settings_button.clicked.connect(self.settings_clicked)
+
+        self._apply_bar_theme()
+
+    def _apply_bar_theme(self):
+        t = self.theme
+        layout = t.get("layout", {})
+        mode = layout.get("mode", "bar")
+        bar_text = t.get("bottom_bar_text", "black")
+        accent = t.get("accent", "#3498db")
+        bar_radius = int(t.get("bar_radius", 15))
+        input_radius = int(t.get("input_radius", 5))
+        combo_radius = int(t.get("combo_radius", 5))
+
+        if mode == "centered":
+            self.bar.setStyleSheet(f"""
+                background-color: {t.get('bottom_bar', 'rgba(20, 25, 40, 0.95)')};
+                border-radius: {bar_radius}px;
+                border: 1px solid {t.get('info_panel_border', 'rgba(255, 255, 255, 0.25)')};
+            """)
+        else:
+            self.bar.setStyleSheet(f"background-color: {t.get('bottom_bar', 'rgba(113, 169, 76, 0.9)')};")
+
+        self.input_field.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {t.get('input_bg', 'white')};
+                color: {t.get('input_text', 'black')};
+                font-size: 18px;
+                font-weight: bold;
+                border-radius: {input_radius}px;
+                padding: 5px;
+                border: 1px solid {t.get('input_border', 'transparent')};
+            }}
+        """)
+
+        self.version_combo.setStyleSheet(f"""
+            QComboBox {{
+                background: transparent;
+                border: none;
+                padding: 0;
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                background: transparent;
+                width: 0px;
+            }}
+            QComboBox QAbstractItemView {{
+                border: 1px solid #aaa;
+                background-color: {t.get('combo_bg', 'white')};
+                color: {t.get('combo_text', 'black')};
+                selection-background-color: {accent};
+                selection-color: white;
+                outline: none;
+                padding: 4px;
+                min-width: 260px;
+                border-radius: {combo_radius}px;
+            }}
+        """)
+
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{
+                border: 1px solid {t.get('input_border', 'grey')};
+                border-radius: 5px;
+                text-align: center;
+                background-color: {t.get('input_bg', 'white')};
+            }}
+            QProgressBar::chunk {{
+                background-color: {accent};
+                width: 10px;
+            }}
+        """)
+
+        self.download_info_label.setStyleSheet(
+            f"font-size: 12px; color: {bar_text}; background: transparent; border: none;"
+        )
+        self.download_info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.play_button.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {t.get('play_bg', 'rgb(236, 193, 63)')};
+                color: {t.get('play_text', 'white')};
+                font-size: 18px;
+                font-weight: bold;
+                border-radius: {input_radius}px;
+                border: none;
+            }}
+            QPushButton:hover {{
+                background-color: {t.get('play_hover', 'rgb(246, 203, 73)')};
+            }}
+            QPushButton:pressed {{
+                background-color: {t.get('play_pressed', 'rgb(226, 183, 53)')};
+            }}
+        """)
+
+        icon_style = f"""
+            QPushButton {{
                 border: none;
                 background-color: transparent;
                 padding: 0;
                 outline: none;
-            }
-            QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.1);
+            }}
+            QPushButton:hover {{
+                background-color: {t.get('icon_hover', 'rgba(255, 255, 255, 0.1)')};
                 border-radius: 5px;
-            }
-        """)
-        self.settings_button.clicked.connect(self.settings_clicked)
+            }}
+        """
+        for btn in (self.flm_button, self.reload_button, self.folder_button, self.settings_button):
+            btn.setStyleSheet(icon_style)
 
     def add_release_panel(self):
         self.release_panel = QWidget(self.main)
-        self.release_panel.setGeometry(20, 10, 700, self.main.height() - 110)
-        self.release_panel.setStyleSheet("""
-            background-color: rgba(255, 255, 255, 0.85);
-            border-radius: 15px;
-            border: 1px solid rgba(255, 255, 255, 0.35);
-        """)
         self.release_layout = QVBoxLayout(self.release_panel)
         self.release_layout.setContentsMargins(25, 20, 25, 20)
         self.release_layout.setSpacing(25)
         self.scroll_area = QScrollArea(self.main)
         self.scroll_area.setWidget(self.release_panel)
-        self.scroll_area.setGeometry(20, 10, 800, self.main.height() - 110)
         self.scroll_area.setWidgetResizable(True)
         self.release_panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.scroll_area.setStyleSheet("""
-            QScrollArea {
-                border: none;
-                background: transparent;
-            }
+            QScrollArea { border: none; background: transparent; }
             QScrollBar:vertical {
                 border: none;
                 background: rgba(200, 200, 200, 0.35);
                 width: 8px;
-                margin: 0px 0px 0px 0px;
+                margin: 0px;
                 border-radius: 4px;
             }
             QScrollBar::handle:vertical {
@@ -542,6 +815,15 @@ class UIComponents(QObject):
                 height: 0px;
             }
         """)
+        self._apply_release_panel_theme()
+
+    def _apply_release_panel_theme(self):
+        t = self.theme
+        self.release_panel.setStyleSheet(f"""
+            background-color: {t.get('release_panel_bg', 'rgba(255, 255, 255, 0.85)')};
+            border-radius: 15px;
+            border: 1px solid {t.get('release_panel_border', 'rgba(255, 255, 255, 0.35)')};
+        """)
 
     def display_releases(self, releases_data):
         for i in reversed(range(self.release_layout.count())):
@@ -550,11 +832,13 @@ class UIComponents(QObject):
             if widget:
                 widget.setParent(None)
 
+        t = self.theme
+
         if not releases_data:
             no_releases_label = QLabel('Нет доступных релизов для вашей платформы.')
-            no_releases_label.setStyleSheet("""
+            no_releases_label.setStyleSheet(f"""
                 font-size: 15px;
-                color: #666;
+                color: {t.get('release_text', '#666')};
                 background: transparent;
                 border: none;
                 padding: 20px 0;
@@ -573,10 +857,10 @@ class UIComponents(QObject):
         for repo, repo_releases in repos_dict.items():
             if len(repos_dict) > 1:
                 repo_header = QLabel(f'Репозиторий: {repo}')
-                repo_header.setStyleSheet("""
+                repo_header.setStyleSheet(f"""
                     font-size: 16px;
                     font-weight: bold;
-                    color: #333;
+                    color: {t.get('release_text', '#333')};
                     background: transparent;
                     border: none;
                     padding: 0 0 5px 0;
@@ -584,7 +868,7 @@ class UIComponents(QObject):
                 self.release_layout.addWidget(repo_header)
 
             for release in repo_releases:
-                release_widget = ReleaseDisplayWidget(release)
+                release_widget = ReleaseDisplayWidget(release, theme=t)
                 self.release_layout.addWidget(release_widget)
 
         all_releases_label = QLabel()
@@ -592,13 +876,13 @@ class UIComponents(QObject):
             f'<div style="margin-top: 10px;">'
             f'Все релизы: '
             f'<a href="https://github.com/{MAIN_REPO}/releases" '
-            f'style="color: #0066cc; text-decoration: none;">'
+            f'style="color: {t.get("release_version", "#0066cc")}; text-decoration: none;">'
             f'github.com/{MAIN_REPO}/releases</a></div>'
         )
         all_releases_label.setOpenExternalLinks(True)
-        all_releases_label.setStyleSheet("""
+        all_releases_label.setStyleSheet(f"""
             font-size: 14px;
-            color: #555;
+            color: {t.get('release_text', '#555')};
             background: transparent;
             border: none;
         """)
@@ -636,14 +920,8 @@ class UIComponents(QObject):
         self.release_layout.addStretch(1)
 
     def add_info_panel(self):
-        info_panel = QWidget(self.main)
-        info_panel.setGeometry(830, 10, 250, self.main.height() - 110)
-        info_panel.setStyleSheet("""
-            background-color: rgba(90, 171, 215, 0.5);
-            border-radius: 15px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        """)
-        info_layout = QVBoxLayout(info_panel)
+        self.info_panel = QWidget(self.main)
+        info_layout = QVBoxLayout(self.info_panel)
         info_layout.setContentsMargins(15, 20, 15, 20)
         info_layout.setSpacing(15)
 
@@ -651,59 +929,27 @@ class UIComponents(QObject):
         header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.setSpacing(0)
 
-        title_label = QLabel('FLAUNCHER')
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet("""
-            font-size: 30px;
-            font-weight: bold;
-            color: white;
-            background: transparent;
-            border: none;
-        """)
-        header_layout.addWidget(title_label)
+        self.header_title = QLabel('FLAUNCHER')
+        self.header_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        header_layout.addWidget(self.header_title)
 
-        subtitle_label = QLabel('ЛАУНЧЕР ДЛЯ VOXELCORE')
-        subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        subtitle_label.setStyleSheet("""
-            font-size: 13px;
-            font-weight: normal;
-            color: white;
-            background: transparent;
-            border: none;
-        """)
-        header_layout.addWidget(subtitle_label)
+        self.header_subtitle = QLabel('ЛАУНЧЕР ДЛЯ VOXELCORE')
+        self.header_subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        header_layout.addWidget(self.header_subtitle)
 
         info_layout.addLayout(header_layout)
 
-        button_style = """
-            QPushButton {
-                background-color: rgba(62, 148, 182, 0.85);
-                font-size: 16px;
-                color: white;
-                padding: 10px;
-                border-radius: 8px;
-                border: 1px solid rgba(255, 255, 255, 0.3);
-            }
-            QPushButton:hover {
-                background-color: rgba(72, 158, 192, 0.95);
-                border: 1px solid rgba(255, 255, 255, 0.5);
-            }
-            QPushButton:pressed {
-                background-color: rgba(52, 138, 172, 1.0);
-            }
-        """
-
         button_freshlend = QPushButton("FreshLend Studio")
-        button_freshlend.setStyleSheet(button_style)
         button_freshlend.setFixedHeight(40)
         button_freshlend.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://freshlend.github.io")))
         info_layout.addWidget(button_freshlend)
+        self.info_buttons.append(button_freshlend)
 
         button_voxel = QPushButton("VoxelWorld")
-        button_voxel.setStyleSheet(button_style)
         button_voxel.setFixedHeight(40)
         button_voxel.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://voxelworld.ru/profile/84")))
         info_layout.addWidget(button_voxel)
+        self.info_buttons.append(button_voxel)
 
         info_layout.addStretch(1)
 
@@ -711,142 +957,522 @@ class UIComponents(QObject):
         bottom_layout.setContentsMargins(5, 0, 5, 0)
         bottom_layout.setSpacing(10)
 
-        platform_label = QLabel(_platform_name())
-        platform_label.setStyleSheet("""
-            font-size: 13px;
-            color: white;
-            background: transparent;
-            border: none;
-        """)
-        version_label = QLabel(VERSION)
-        version_label.setStyleSheet("""
-            font-size: 13px;
-            color: white;
-            background: transparent;
-            border: none;
-        """)
+        self.bottom_platform_label = QLabel(_platform_name())
+        self.bottom_version_label = QLabel(VERSION)
 
-        bottom_layout.addWidget(platform_label)
+        bottom_layout.addWidget(self.bottom_platform_label)
         bottom_layout.addStretch(1)
-        bottom_layout.addWidget(version_label)
+        bottom_layout.addWidget(self.bottom_version_label)
         info_layout.addLayout(bottom_layout)
 
+        self._apply_info_panel_theme()
+
+    def _apply_info_panel_theme(self):
+        t = self.theme
+        text_color = t.get("info_text", "white")
+
+        self.info_panel.setStyleSheet(f"""
+            background-color: {t.get('info_panel_bg', 'rgba(90, 171, 215, 0.5)')};
+            border-radius: 15px;
+            border: 1px solid {t.get('info_panel_border', 'rgba(255, 255, 255, 0.2)')};
+        """)
+
+        self.header_title.setStyleSheet(f"""
+            font-size: 30px;
+            font-weight: bold;
+            color: {text_color};
+            background: transparent;
+            border: none;
+        """)
+
+        self.header_subtitle.setStyleSheet(f"""
+            font-size: 13px;
+            font-weight: normal;
+            color: {text_color};
+            background: transparent;
+            border: none;
+        """)
+
+        btn_style = f"""
+            QPushButton {{
+                background-color: {t.get('info_btn_bg', 'rgba(62, 148, 182, 0.85)')};
+                font-size: 16px;
+                color: {text_color};
+                padding: 10px;
+                border-radius: 8px;
+                border: 1px solid {t.get('info_btn_border', 'rgba(255, 255, 255, 0.3)')};
+            }}
+            QPushButton:hover {{
+                background-color: {t.get('info_btn_hover', 'rgba(72, 158, 192, 0.95)')};
+                border: 1px solid {t.get('info_btn_border_hover', 'rgba(255, 255, 255, 0.5)')};
+            }}
+            QPushButton:pressed {{
+                background-color: {t.get('info_btn_pressed', 'rgba(52, 138, 172, 1.0)')};
+            }}
+        """
+        for btn in self.info_buttons:
+            btn.setStyleSheet(btn_style)
+
+        bottom_label_style = f"""
+            font-size: 13px;
+            color: {text_color};
+            background: transparent;
+            border: none;
+        """
+        self.bottom_platform_label.setStyleSheet(bottom_label_style)
+        self.bottom_version_label.setStyleSheet(bottom_label_style)
+
     def add_settings_panel(self):
+        t = self.theme
+
         self.settings_background = QWidget(self.main)
-        self.settings_background.setGeometry(0, 0, self.main.width(), self.main.height() - 90)
-        self.settings_background.setStyleSheet("background-color: rgba(0, 0, 0, 0.5);")
+        self.settings_background.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.settings_background.setStyleSheet("background-color: rgba(0, 0, 0, 128);")
         self.settings_background.hide()
 
         self.settings_panel = QWidget(self.main)
-        self.settings_panel.setGeometry(0, 0, self.main.width(), self.main.height() - 90)
-        self.settings_panel.setStyleSheet("""
-            background-color: #f5f5f5;
-            border-radius: 0px;
-        """)
+        self.settings_panel.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.settings_panel.setAutoFillBackground(False)
         self.settings_panel.hide()
 
-        blue_strip = QWidget(self.settings_panel)
-        blue_strip.setGeometry(0, 0, self.settings_panel.width(), 50)
-        blue_strip.setStyleSheet("background-color: #0086c7;")
-        blue_layout = QHBoxLayout(blue_strip)
+        self.settings_header_strip = QWidget(self.settings_panel)
+        self.settings_header_strip.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.settings_header_strip.setAutoFillBackground(False)
+        blue_layout = QHBoxLayout(self.settings_header_strip)
         blue_layout.setContentsMargins(20, 0, 20, 0)
 
-        settings_label = QLabel('Настройки')
-        settings_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        settings_label.setStyleSheet("""
-            font-size: 20px;
-            font-weight: bold;
-            color: white;
-            background: transparent;
-            border: none;
-        """)
-        blue_layout.addWidget(settings_label)
+        self.settings_header_label = QLabel('Настройки')
+        self.settings_header_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        blue_layout.addWidget(self.settings_header_label)
 
         blue_layout.addStretch()
 
-        close_button = QPushButton("✕")
-        close_button.setFixedSize(30, 30)
-        close_button.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                color: white;
-                font-size: 20px;
-                font-weight: bold;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.2);
-                border-radius: 15px;
-            }
-        """)
-        close_button.clicked.connect(self.settings_clicked)
-        blue_layout.addWidget(close_button)
+        self.settings_close_btn = QPushButton("✕", self.settings_panel)
+        self.settings_close_btn.setFixedSize(30, 30)
+        self.settings_close_btn.clicked.connect(self.settings_clicked)
 
-        self.tab_widget = FullWidthTabWidget(self.settings_panel)
-        self.tab_widget.setGeometry(0, 50, self.settings_panel.width(), self.settings_panel.height() - 50)
+        self.tab_widget = FullWidthTabWidget(self.settings_panel, theme=t)
         self.tab_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         self._create_launch_tab()
         self._create_flauncher_tab()
         self._create_privacy_tab()
 
-    def _create_launch_tab(self):
-        launch_tab = QWidget()
-        launch_tab.setStyleSheet("background-color: #f5f5f5;")
+        self._apply_settings_panel_theme()
 
-        outer = QVBoxLayout(launch_tab)
-        outer.setContentsMargins(30, 25, 30, 25)
-        outer.setSpacing(8)
+    def _update_settings_backdrop(self):
+        layout = self.theme.get("layout", {})
+        mode = layout.get("mode", "bar")
+        settings_mode = layout.get("settings_mode", "fullscreen")
+        backdrop = layout.get("settings_backdrop", "dim")
 
-        label = QLabel("Параметры запуска")
-        label.setStyleSheet("""
-            font-size: 14px;
+        if not getattr(self, "_settings_open", False):
+            self.settings_background.hide()
+            return
+
+        side = mode == "centered" and settings_mode in ("right", "left")
+
+        if side or backdrop == "none":
+            self.settings_background.hide()
+        else:
+            self.settings_background.show()
+
+    def _apply_settings_panel_theme(self):
+        t = self.theme
+        layout = t.get("layout", {})
+        mode = layout.get("mode", "bar")
+        settings_mode = layout.get("settings_mode", "fullscreen")
+        side = mode == "centered" and settings_mode in ("right", "left")
+        panel_radius = int(t.get("bar_radius", 15))
+        header_text = t.get("settings_header_text", "#ffffff")
+
+        self.settings_panel.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.settings_panel.setAutoFillBackground(False)
+        self.settings_header_strip.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.settings_header_strip.setAutoFillBackground(False)
+
+        if side:
+            self.settings_panel.setStyleSheet(f"""
+                background-color: {t.get('settings_bg', 'rgba(255, 255, 255, 210)')};
+                border: 1px solid {t.get('group_border', '#E0E0E0')};
+                border-radius: {panel_radius}px;
+            """)
+            self.settings_header_strip.setStyleSheet(f"""
+                background-color: {t.get('settings_header', 'rgba(235, 235, 235, 150)')};
+                border-top-left-radius: {panel_radius}px;
+                border-top-right-radius: {panel_radius}px;
+            """)
+        else:
+            self.settings_panel.setStyleSheet(f"""
+                background-color: {t.get('settings_bg', '#f5f5f5')};
+                border-radius: 0px;
+            """)
+            self.settings_header_strip.setStyleSheet(
+                f"background-color: {t.get('settings_header', '#0086c7')};"
+            )
+
+        self.settings_header_label.setStyleSheet(f"""
+            font-size: 20px;
             font-weight: bold;
-            color: #333;
+            color: {header_text};
             background: transparent;
             border: none;
         """)
-        outer.addWidget(label)
+
+        self.settings_close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {header_text};
+                font-size: 20px;
+                font-weight: bold;
+                border: none;
+            }}
+            QPushButton:hover {{
+                background-color: rgba(0, 0, 0, 40);
+                border-radius: 15px;
+            }}
+        """)
+
+        if self.tab_widget:
+            self.tab_widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            self.tab_widget.setAutoFillBackground(False)
+            self.tab_widget.set_theme(t)
+
+        for tab in (self.launch_tab, self.flauncher_tab, self.privacy_tab):
+            if tab:
+                tab.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+                tab.setAutoFillBackground(False)
+                tab.setStyleSheet("background: transparent; border: none;")
+                for sa in tab.findChildren(QScrollArea):
+                    sa.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+                    sa.setAutoFillBackground(False)
+                    sa.viewport().setAutoFillBackground(False)
+                    sa.viewport().setStyleSheet("background: transparent;")
+
+        for group, title_label, content in self.group_boxes:
+            group.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            group.setAutoFillBackground(False)
+            content.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            content.setAutoFillBackground(False)
+            title_label.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            title_label.setAutoFillBackground(False)
+
+            if side:
+                group.setStyleSheet(f"""
+                    #settingsGroupBox {{
+                        background-color: {t.get('group_body_bg', 'rgba(255, 255, 255, 180)')};
+                        border: 1px solid {t.get('group_border', 'rgba(200, 200, 200, 150)')};
+                        border-radius: 5px;
+                    }}
+                """)
+                title_label.setStyleSheet(f"""
+                    font-size: 14px;
+                    font-weight: bold;
+                    color: {t.get('group_title_text', '#333')};
+                    background-color: {t.get('group_title_bg', 'rgba(245, 245, 245, 180)')};
+                    padding: 8px 15px;
+                    border-top-left-radius: 5px;
+                    border-top-right-radius: 5px;
+                    border-bottom: 1px solid {t.get('group_border', 'rgba(200, 200, 200, 150)')};
+                """)
+            else:
+                group.setStyleSheet(f"""
+                    #settingsGroupBox {{
+                        background-color: {t.get('group_body_bg', 'white')};
+                        border: 1px solid {t.get('group_border', '#E0E0E0')};
+                        border-radius: 5px;
+                    }}
+                """)
+                title_label.setStyleSheet(f"""
+                    font-size: 14px;
+                    font-weight: bold;
+                    color: {t.get('group_title_text', '#333')};
+                    background-color: {t.get('group_title_bg', '#F5F5F5')};
+                    padding: 8px 15px;
+                    border-top-left-radius: 5px;
+                    border-top-right-radius: 5px;
+                    border-bottom: 1px solid {t.get('group_border', '#E0E0E0')};
+                """)
+
+        for lbl in self.settings_labels:
+            lbl.setStyleSheet(f"""
+                font-size: 13px;
+                color: {t.get('group_title_text', '#555')};
+                background: transparent;
+                border: none;
+            """)
+
+        if self.launch_params_label:
+            self.launch_params_label.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            self.launch_params_label.setStyleSheet(f"""
+                font-size: 15px;
+                font-weight: bold;
+                color: {t.get('group_title_text', '#333')};
+                background-color: {t.get('group_title_bg', '#F5F5F5')};
+                padding: 8px 15px;
+                border-top-left-radius: 5px;
+                border-top-right-radius: 5px;
+            """)
+
+        if self.additional_args_input:
+            self.additional_args_input.setStyleSheet(f"""
+                QLineEdit {{
+                    border: 1px solid {t.get('input_field_border', '#CCC')};
+                    padding: 8px 12px;
+                    font-size: 13px;
+                    background-color: {t.get('input_field_bg', 'white')};
+                    color: {t.get('input_field_text', 'black')};
+                    border-radius: 3px;
+                }}
+                QLineEdit:focus {{
+                    border: 1px solid {t.get('input_field_focus', '#0086c7')};
+                }}
+            """)
+
+        if self.github_token_input:
+            self.github_token_input.setStyleSheet(f"""
+                QLineEdit {{
+                    border: 1px solid {t.get('input_field_border', '#CCC')};
+                    padding: 6px 10px;
+                    font-size: 13px;
+                    background-color: {t.get('input_field_bg', 'white')};
+                    color: {t.get('input_field_text', 'black')};
+                    border-radius: 3px;
+                }}
+                QLineEdit:focus {{
+                    border: 1px solid {t.get('input_field_focus', '#2196F3')};
+                }}
+            """)
+
+        if self.theme_combo:
+            self.theme_combo.setStyleSheet(f"""
+                QComboBox {{
+                    border: 1px solid {t.get('input_field_border', '#CCC')};
+                    padding: 6px 10px;
+                    font-size: 13px;
+                    background-color: {t.get('input_field_bg', 'white')};
+                    color: {t.get('input_field_text', 'black')};
+                    border-radius: 3px;
+                }}
+                QComboBox:focus {{
+                    border: 1px solid {t.get('input_field_focus', '#0086c7')};
+                }}
+                QComboBox::drop-down {{
+                    border: none;
+                    width: 24px;
+                }}
+                QComboBox QAbstractItemView {{
+                    background-color: {t.get('input_field_bg', 'white')};
+                    color: {t.get('input_field_text', 'black')};
+                    selection-background-color: {t.get('accent', '#3498db')};
+                    selection-color: white;
+                    outline: none;
+                    border: 1px solid {t.get('input_field_border', '#CCC')};
+                }}
+            """)
+
+        if self.artifacts_count_spin:
+            self.artifacts_count_spin.setStyleSheet(f"""
+                QSpinBox {{
+                    border: 1px solid {t.get('input_field_border', '#CCC')};
+                    padding: 4px 8px;
+                    font-size: 13px;
+                    background-color: {t.get('input_field_bg', 'white')};
+                    color: {t.get('input_field_text', 'black')};
+                    border-radius: 3px;
+                }}
+                QSpinBox::up-button, QSpinBox::down-button {{
+                    background-color: {t.get('group_title_bg', '#F0F0F0')};
+                    border: none;
+                    width: 18px;
+                }}
+            """)
+
+        for cb in (
+            getattr(self, 'msvc_checkbox', None),
+            getattr(self, 'clang_checkbox', None),
+        ):
+            if cb:
+                cb.setStyleSheet(f"""
+                    QCheckBox {{
+                        font-size: 13px;
+                        color: {t.get('group_title_text', '#333')};
+                        spacing: 6px;
+                        background: transparent;
+                        border: none;
+                    }}
+                    QCheckBox::indicator {{
+                        width: 16px;
+                        height: 16px;
+                    }}
+                """)
+
+        if self.repos_scroll:
+            self.repos_scroll.setStyleSheet(f"""
+                QScrollArea {{
+                    border: 1px solid {t.get('group_border', '#DDD')};
+                    background-color: {t.get('group_body_bg', 'white')};
+                    border-radius: 3px;
+                }}
+                QScrollBar:vertical {{
+                    border: none;
+                    background-color: {t.get('group_title_bg', '#F0F0F0')};
+                    width: 10px;
+                    margin: 0px;
+                }}
+                QScrollBar::handle:vertical {{
+                    background-color: #C0C0C0;
+                    min-height: 20px;
+                    border-radius: 5px;
+                }}
+            """)
+
+        if self.open_themes_button:
+            accent = t.get("accent", "#3498db")
+            accent_hover = t.get("accent_hover", "#2980b9")
+            self.open_themes_button.setStyleSheet(f"""
+                QPushButton {{
+                    font-size: 13px;
+                    background-color: {accent};
+                    color: white;
+                    padding: 6px 15px;
+                    border: none;
+                    border-radius: 3px;
+                }}
+                QPushButton:hover {{
+                    background-color: {accent_hover};
+                }}
+            """)
+
+        if self.add_repo_button:
+            accent = t.get("accent", "#4CAF50")
+            accent_hover = t.get("accent_hover", "#45a049")
+            self.add_repo_button.setStyleSheet(f"""
+                QPushButton {{
+                    font-size: 13px;
+                    background-color: {accent};
+                    color: white;
+                    padding: 6px 15px;
+                    border: none;
+                    border-radius: 3px;
+                }}
+                QPushButton:hover {{
+                    background-color: {accent_hover};
+                }}
+            """)
+
+        if self.check_token_button:
+            self.check_token_button.setStyleSheet(f"""
+                QPushButton {{
+                    font-size: 13px;
+                    background-color: #2196F3;
+                    color: white;
+                    padding: 6px 15px;
+                    border: none;
+                    border-radius: 3px;
+                }}
+                QPushButton:hover {{
+                    background-color: #1976D2;
+                }}
+            """)
+
+        if self.refresh_releases_button:
+            accent = t.get("accent", "#4CAF50")
+            accent_hover = t.get("accent_hover", "#45a049")
+            self.refresh_releases_button.setStyleSheet(f"""
+                QPushButton {{
+                    font-size: 13px;
+                    background-color: {accent};
+                    color: white;
+                    padding: 6px 15px;
+                    border: none;
+                    border-radius: 3px;
+                }}
+                QPushButton:hover {{
+                    background-color: {accent_hover};
+                }}
+            """)
+
+    def _create_launch_tab(self):
+        t = self.theme
+        self.launch_tab = QWidget()
+
+        outer = QVBoxLayout(self.launch_tab)
+        outer.setContentsMargins(30, 25, 30, 25)
+        outer.setSpacing(8)
+
+        self.launch_params_label = QLabel("Параметры запуска")
+        outer.addWidget(self.launch_params_label)
 
         self.additional_args_input = QLineEdit()
         self.additional_args_input.textChanged.connect(self.launch_params_changed)
-        self.additional_args_input.setStyleSheet("""
-            QLineEdit {
-                border: 1px solid #CCC;
-                padding: 8px 12px;
-                font-size: 13px;
-                background-color: white;
-                border-radius: 3px;
-            }
-            QLineEdit:focus {
-                border: 1px solid #0086c7;
-            }
-        """)
         self.additional_args_input.setPlaceholderText(
             "Параметры (e.g. --headless --script content/example/scripts/main.lua)"
         )
         outer.addWidget(self.additional_args_input)
-
         outer.addStretch(1)
 
-        self.tab_widget.addTab(launch_tab, "Настройки VoxelCore")
+        self.tab_widget.addTab(self.launch_tab, "Настройки VoxelCore")
 
     def _create_flauncher_tab(self):
-        flauncher_tab = QWidget()
-        flauncher_tab.setStyleSheet("background-color: #f5f5f5;")
+        t = self.theme
+        self.flauncher_tab = QWidget()
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        scroll.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        scroll.setAutoFillBackground(False)
+        scroll.viewport().setAutoFillBackground(False)
+        scroll.viewport().setStyleSheet("background: transparent;")
+        scroll.setStyleSheet("""
+            QScrollArea { border: none; background: transparent; }
+            QScrollArea > QWidget > QWidget { background: transparent; }
+        """)
 
         content = QWidget()
+        content.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        content.setAutoFillBackground(False)
         content.setStyleSheet("background: transparent;")
         layout = QVBoxLayout(content)
         layout.setContentsMargins(30, 20, 30, 20)
         layout.setSpacing(15)
 
-        artifacts_group, artifacts_container = self._create_group_box("Артефакты")
+        theme_group, theme_container, theme_title = self._create_group_box("Тема оформления")
+        th_layout = QVBoxLayout(theme_container)
+        th_layout.setContentsMargins(20, 15, 20, 15)
+        th_layout.setSpacing(10)
+
+        theme_desc = QLabel(
+            "Внешний вид лаунчера."
+        )
+        theme_desc.setWordWrap(True)
+        self.settings_labels.append(theme_desc)
+        th_layout.addWidget(theme_desc)
+
+        theme_row = QHBoxLayout()
+        theme_row.setSpacing(10)
+
+        self.theme_combo = QComboBox()
+        for key, name in self.theme_manager.available():
+            self.theme_combo.addItem(name, key)
+        current_key = self.theme_manager.current_key
+        for i in range(self.theme_combo.count()):
+            if self.theme_combo.itemData(i) == current_key:
+                self.theme_combo.setCurrentIndex(i)
+                break
+        self.theme_combo.currentIndexChanged.connect(self._on_theme_combo_changed)
+
+        self.open_themes_button = QPushButton("Открыть папку тем")
+        self.open_themes_button.setFixedHeight(30)
+        self.open_themes_button.clicked.connect(self._on_open_themes_folder)
+
+        theme_row.addWidget(self.theme_combo, 1)
+        theme_row.addWidget(self.open_themes_button)
+        th_layout.addLayout(theme_row)
+        layout.addWidget(theme_group)
+
+        artifacts_group, artifacts_container, artifacts_title = self._create_group_box("Артефакты")
         a_layout = QVBoxLayout(artifacts_container)
         a_layout.setContentsMargins(20, 15, 20, 15)
         a_layout.setSpacing(12)
@@ -854,17 +1480,12 @@ class UIComponents(QObject):
         row1 = QHBoxLayout()
         row1.setSpacing(15)
 
-        self.artifacts_toggle = ToggleSwitch()
+        self.artifacts_toggle = ToggleSwitch(theme=t)
         self.artifacts_toggle.toggled.connect(self.artifacts_toggled.emit)
 
         artifacts_desc = QLabel("Показывать экспериментальные сборки из GitHub Actions.")
-        artifacts_desc.setStyleSheet("""
-            font-size: 13px;
-            color: #555;
-            background: transparent;
-            border: none;
-        """)
         artifacts_desc.setWordWrap(True)
+        self.settings_labels.append(artifacts_desc)
 
         row1.addWidget(self.artifacts_toggle, alignment=Qt.AlignmentFlag.AlignVCenter)
         row1.addWidget(artifacts_desc, 1)
@@ -877,20 +1498,11 @@ class UIComponents(QObject):
         count_layout.setSpacing(20)
 
         count_label = QLabel("Количество:")
-        count_label.setStyleSheet("font-size: 13px; color: #555; background: transparent; border: none;")
+        self.settings_labels.append(count_label)
 
         self.artifacts_count_spin = QSpinBox()
         self.artifacts_count_spin.setRange(1, 50)
         self.artifacts_count_spin.setFixedWidth(80)
-        self.artifacts_count_spin.setStyleSheet("""
-            QSpinBox {
-                border: 1px solid #CCC;
-                padding: 4px 8px;
-                font-size: 13px;
-                background-color: white;
-                border-radius: 3px;
-            }
-        """)
         self.artifacts_count_spin.valueChanged.connect(self.artifacts_count_changed)
 
         count_layout.addWidget(count_label)
@@ -904,38 +1516,12 @@ class UIComponents(QObject):
             w_layout.setSpacing(20)
 
             self.msvc_checkbox = QCheckBox("MSVC")
-            self.msvc_checkbox.setStyleSheet("""
-                QCheckBox {
-                    font-size: 13px;
-                    color: #333;
-                    spacing: 6px;
-                    background: transparent;
-                    border: none;
-                }
-                QCheckBox::indicator {
-                    width: 16px;
-                    height: 16px;
-                }
-            """)
             self.msvc_checkbox.stateChanged.connect(
                 lambda state: self.windows_build_type_changed.emit('msvc', state == Qt.CheckState.Checked.value)
             )
             w_layout.addWidget(self.msvc_checkbox)
 
             self.clang_checkbox = QCheckBox("CLang")
-            self.clang_checkbox.setStyleSheet("""
-                QCheckBox {
-                    font-size: 13px;
-                    color: #333;
-                    spacing: 6px;
-                    background: transparent;
-                    border: none;
-                }
-                QCheckBox::indicator {
-                    width: 16px;
-                    height: 16px;
-                }
-            """)
             self.clang_checkbox.stateChanged.connect(
                 lambda state: self.windows_build_type_changed.emit('clang', state == Qt.CheckState.Checked.value)
             )
@@ -947,7 +1533,7 @@ class UIComponents(QObject):
         a_layout.addWidget(self.artifacts_count_group)
         layout.addWidget(artifacts_group)
 
-        github_group, github_container = self._create_group_box("GitHub Репозитории")
+        github_group, github_container, github_title = self._create_group_box("GitHub Репозитории")
         g_layout = QVBoxLayout(github_container)
         g_layout.setContentsMargins(20, 15, 20, 15)
         g_layout.setSpacing(10)
@@ -956,57 +1542,20 @@ class UIComponents(QObject):
         top_row.setSpacing(10)
 
         github_desc = QLabel("Формат: owner/repo (например MihailRis/voxelcore)")
-        github_desc.setStyleSheet("font-size: 13px; color: #555; background: transparent; border: none;")
+        self.settings_labels.append(github_desc)
 
-        add_repo_button = QPushButton("+ Добавить")
-        add_repo_button.setStyleSheet("""
-            QPushButton {
-                font-size: 13px;
-                background-color: #4CAF50;
-                color: white;
-                padding: 6px 15px;
-                border: none;
-                border-radius: 3px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-            QPushButton:pressed {
-                background-color: #3d8b40;
-            }
-        """)
-        add_repo_button.setFixedHeight(30)
-        add_repo_button.clicked.connect(self.add_repo_clicked)
+        self.add_repo_button = QPushButton("+ Добавить")
+        self.add_repo_button.setFixedHeight(30)
+        self.add_repo_button.clicked.connect(self.add_repo_clicked)
 
         top_row.addWidget(github_desc)
         top_row.addStretch()
-        top_row.addWidget(add_repo_button)
+        top_row.addWidget(self.add_repo_button)
         g_layout.addLayout(top_row)
 
         self.repos_scroll = QScrollArea()
         self.repos_scroll.setWidgetResizable(True)
         self.repos_scroll.setFixedHeight(120)
-        self.repos_scroll.setStyleSheet("""
-            QScrollArea {
-                border: 1px solid #DDD;
-                background-color: white;
-                border-radius: 3px;
-            }
-            QScrollBar:vertical {
-                border: none;
-                background-color: #F0F0F0;
-                width: 10px;
-                margin: 0px;
-            }
-            QScrollBar::handle:vertical {
-                background-color: #C0C0C0;
-                min-height: 20px;
-                border-radius: 5px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background-color: #A0A0A0;
-            }
-        """)
 
         self.repos_container = QWidget()
         self.repos_container.setStyleSheet("background: transparent; border: none;")
@@ -1018,13 +1567,13 @@ class UIComponents(QObject):
         g_layout.addWidget(self.repos_scroll)
         layout.addWidget(github_group)
 
-        token_group, token_container = self._create_group_box("GitHub Токен")
+        token_group, token_container, token_title = self._create_group_box("GitHub Токен")
         t_layout = QVBoxLayout(token_container)
         t_layout.setContentsMargins(20, 15, 20, 15)
         t_layout.setSpacing(10)
 
         token_desc = QLabel("Токен увеличивает лимит запросов к GitHub API")
-        token_desc.setStyleSheet("font-size: 13px; color: #555; background: transparent; border: none;")
+        self.settings_labels.append(token_desc)
         t_layout.addWidget(token_desc)
 
         token_row = QHBoxLayout()
@@ -1033,57 +1582,13 @@ class UIComponents(QObject):
         self.github_token_input = QLineEdit()
         self.github_token_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.github_token_input.textChanged.connect(self.github_token_changed)
-        self.github_token_input.setStyleSheet("""
-            QLineEdit {
-                border: 1px solid #CCC;
-                padding: 6px 10px;
-                font-size: 13px;
-                background-color: white;
-                border-radius: 3px;
-            }
-            QLineEdit:focus {
-                border: 1px solid #2196F3;
-            }
-        """)
         self.github_token_input.setPlaceholderText("Введите GitHub токен...")
 
         self.check_token_button = QPushButton("Проверить")
-        self.check_token_button.setStyleSheet("""
-            QPushButton {
-                font-size: 13px;
-                background-color: #2196F3;
-                color: white;
-                padding: 6px 15px;
-                border: none;
-                border-radius: 3px;
-            }
-            QPushButton:hover {
-                background-color: #1976D2;
-            }
-            QPushButton:pressed {
-                background-color: #0D47A1;
-            }
-        """)
         self.check_token_button.setFixedHeight(30)
         self.check_token_button.clicked.connect(self.check_token_clicked)
 
         self.refresh_releases_button = QPushButton("Обновить релизы")
-        self.refresh_releases_button.setStyleSheet("""
-            QPushButton {
-                font-size: 13px;
-                background-color: #4CAF50;
-                color: white;
-                padding: 6px 15px;
-                border: none;
-                border-radius: 3px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-            QPushButton:pressed {
-                background-color: #3d8b40;
-            }
-        """)
         self.refresh_releases_button.setFixedHeight(30)
         self.refresh_releases_button.clicked.connect(self.refresh_releases_clicked)
 
@@ -1093,13 +1598,6 @@ class UIComponents(QObject):
         t_layout.addLayout(token_row)
 
         self.token_status_label = QLabel('')
-        self.token_status_label.setStyleSheet("""
-            font-size: 12px;
-            color: #666;
-            padding: 4px 0;
-            background: transparent;
-            border: none;
-        """)
         self.token_status_label.setWordWrap(True)
         t_layout.addWidget(self.token_status_label)
         layout.addWidget(token_group)
@@ -1107,21 +1605,21 @@ class UIComponents(QObject):
         layout.addStretch(1)
         scroll.setWidget(content)
 
-        outer = QVBoxLayout(flauncher_tab)
+        outer = QVBoxLayout(self.flauncher_tab)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(scroll)
 
-        self.tab_widget.addTab(flauncher_tab, "Настройки FLauncher")
+        self.tab_widget.addTab(self.flauncher_tab, "Настройки FLauncher")
 
     def _create_privacy_tab(self):
-        privacy_tab = QWidget()
-        privacy_tab.setStyleSheet("background-color: #f5f5f5;")
+        t = self.theme
+        self.privacy_tab = QWidget()
 
-        layout = QVBoxLayout(privacy_tab)
+        layout = QVBoxLayout(self.privacy_tab)
         layout.setContentsMargins(30, 25, 30, 25)
         layout.setSpacing(15)
 
-        discord_group, discord_container = self._create_group_box("Discord")
+        discord_group, discord_container, discord_title = self._create_group_box("Discord")
         d_layout = QVBoxLayout(discord_container)
         d_layout.setContentsMargins(20, 15, 20, 15)
         d_layout.setSpacing(12)
@@ -1129,17 +1627,12 @@ class UIComponents(QObject):
         row = QHBoxLayout()
         row.setSpacing(15)
 
-        self.discord_toggle = ToggleSwitch()
+        self.discord_toggle = ToggleSwitch(theme=t)
         self.discord_toggle.toggled.connect(self.discord_toggled.emit)
 
         discord_desc = QLabel("Отображать вашу активность в Discord")
-        discord_desc.setStyleSheet("""
-            font-size: 13px;
-            color: #555;
-            background: transparent;
-            border: none;
-        """)
         discord_desc.setWordWrap(True)
+        self.settings_labels.append(discord_desc)
 
         row.addWidget(self.discord_toggle, alignment=Qt.AlignmentFlag.AlignVCenter)
         row.addWidget(discord_desc, 1)
@@ -1148,104 +1641,126 @@ class UIComponents(QObject):
         layout.addWidget(discord_group)
         layout.addStretch(1)
 
-        self.tab_widget.addTab(privacy_tab, "Конфиденциальность")
+        self.tab_widget.addTab(self.privacy_tab, "Конфиденциальность")
 
     def _create_group_box(self, title):
         group_box = QWidget()
         group_box.setObjectName("settingsGroupBox")
-        group_box.setStyleSheet("""
-            #settingsGroupBox {
-                background-color: white;
-                border: 1px solid #E0E0E0;
-                border-radius: 5px;
-            }
-        """)
+        group_box.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+
         main_layout = QVBoxLayout(group_box)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
         title_label = QLabel(title)
-        title_label.setStyleSheet("""
-            font-size: 14px;
-            font-weight: bold;
-            color: #333;
-            background-color: #F5F5F5;
-            padding: 8px 15px;
-            border-top-left-radius: 5px;
-            border-top-right-radius: 5px;
-            border-bottom: 1px solid #E0E0E0;
-        """)
+        title_label.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         main_layout.addWidget(title_label)
 
         content_container = QWidget()
         content_container.setObjectName("contentContainer")
+        content_container.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         content_container.setStyleSheet("background: transparent; border: none;")
         main_layout.addWidget(content_container)
-        return group_box, content_container
+
+        self.group_boxes.append((group_box, title_label, content_container))
+        return group_box, content_container, title_label
+
+    def _on_theme_combo_changed(self, index):
+        if index < 0:
+            return
+        key = self.theme_combo.itemData(index)
+        if key:
+            self.theme_selected.emit(key)
+
+    def refresh_themes_combo(self):
+        if self.theme_combo is None:
+            return
+        self.theme_manager.reload()
+        self.theme_combo.blockSignals(True)
+        self.theme_combo.clear()
+        for key, name in self.theme_manager.available():
+            self.theme_combo.addItem(name, key)
+        current_key = self.theme_manager.current_key
+        for i in range(self.theme_combo.count()):
+            if self.theme_combo.itemData(i) == current_key:
+                self.theme_combo.setCurrentIndex(i)
+                break
+        self.theme_combo.blockSignals(False)
+
+    def _on_open_themes_folder(self):
+        self.open_themes_folder_clicked.emit()
 
     def add_fl_mods_panel(self):
         self.FL_MODS_background = QWidget(self.main)
-        self.FL_MODS_background.setGeometry(0, 0, self.main.width(), self.main.height() - 90)
         self.FL_MODS_background.setStyleSheet("background-color: rgba(0, 0, 0, 0.5);")
         self.FL_MODS_background.hide()
 
         self.FL_MODS = QWidget(self.main)
-        self.FL_MODS.setGeometry(0, 0, self.main.width(), self.main.height() - 90)
-        self.FL_MODS.setStyleSheet("""
-            background-color: #f5f5f5;
-            border-radius: 0px;
-        """)
         self.FL_MODS.hide()
 
-        blue_strip = QWidget(self.FL_MODS)
-        blue_strip.setGeometry(0, 0, self.FL_MODS.width(), 50)
-        blue_strip.setStyleSheet("background-color: #00aaff;")
-        blue_layout = QHBoxLayout(blue_strip)
+        self.flmods_header_strip = QWidget(self.FL_MODS)
+        blue_layout = QHBoxLayout(self.flmods_header_strip)
         blue_layout.setContentsMargins(20, 0, 20, 0)
 
-        flmods_label = QLabel('FLMODS')
-        flmods_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        flmods_label.setStyleSheet("""
-            font-size: 20px;
-            font-weight: bold;
-            color: white;
-            background: transparent;
-            border: none;
-        """)
-        blue_layout.addWidget(flmods_label)
+        self.flmods_header_label = QLabel('FLMODS')
+        self.flmods_header_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        blue_layout.addWidget(self.flmods_header_label)
 
-        version_label = QLabel("Версия игры:")
-        version_label.setStyleSheet("color: white; font-size: 14px; margin-left: 30px; background: transparent; border: none;")
-        blue_layout.addWidget(version_label)
+        self.flmods_version_label = QLabel("Версия игры:")
+        blue_layout.addWidget(self.flmods_version_label)
 
         self.mods_version_combo = QComboBox()
         self.mods_version_combo.setMinimumWidth(280)
-        self.mods_version_combo.setStyleSheet("""
-            QComboBox {
-                background-color: white;
-                color: black;
-                font-size: 14px;
-                font-weight: bold;
-                border-radius: 4px;
-                padding: 4px 8px;
-            }
-            QComboBox QAbstractItemView {
-                border: 1px solid #aaa;
-                background-color: white;
-                color: black;
-                selection-background-color: #3498db;
-                selection-color: white;
-                outline: none;
-            }
-        """)
         self.mods_version_combo.currentTextChanged.connect(self._on_mods_version_changed)
         blue_layout.addWidget(self.mods_version_combo)
 
         blue_layout.addStretch()
 
-        close_button = QPushButton("✕")
-        close_button.setFixedSize(30, 30)
-        close_button.setStyleSheet("""
+        self.flmods_close_btn = QPushButton("✕", self.FL_MODS)
+        self.flmods_close_btn.setFixedSize(30, 30)
+        self.flmods_close_btn.clicked.connect(self.flm_clicked)
+
+        layout = QVBoxLayout(self.FL_MODS)
+        layout.setContentsMargins(0, 50, 0, 0)
+        self.mods_widget = ModsWidget(self.settings_manager, self.main.thread_manager)
+        layout.addWidget(self.mods_widget)
+
+        self._apply_flmods_theme()
+
+    def _apply_flmods_theme(self):
+        t = self.theme
+        self.FL_MODS.setStyleSheet(f"""
+            background-color: {t.get('settings_bg', '#f5f5f5')};
+            border-radius: 0px;
+        """)
+        self.flmods_header_strip.setStyleSheet(f"background-color: {t.get('flmods_header', '#00aaff')};")
+        self.flmods_header_label.setStyleSheet(f"""
+            font-size: 20px;
+            font-weight: bold;
+            color: {t.get('flmods_text', 'white')};
+            background: transparent;
+            border: none;
+        """)
+        self.flmods_version_label.setStyleSheet(f"color: {t.get('flmods_text', 'white')}; font-size: 14px; margin-left: 30px; background: transparent; border: none;")
+        self.mods_version_combo.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {t.get('combo_bg', 'white')};
+                color: {t.get('combo_text', 'black')};
+                font-size: 14px;
+                font-weight: bold;
+                border-radius: 4px;
+                padding: 4px 8px;
+            }}
+            QComboBox QAbstractItemView {{
+                border: 1px solid #aaa;
+                background-color: {t.get('combo_bg', 'white')};
+                color: {t.get('combo_text', 'black')};
+                selection-background-color: {t.get('accent', '#3498db')};
+                selection-color: white;
+                outline: none;
+            }}
+        """)
+        self.flmods_close_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
                 color: white;
@@ -1258,13 +1773,6 @@ class UIComponents(QObject):
                 border-radius: 15px;
             }
         """)
-        close_button.clicked.connect(self.flm_clicked)
-        blue_layout.addWidget(close_button)
-
-        layout = QVBoxLayout(self.FL_MODS)
-        layout.setContentsMargins(0, 50, 0, 0)
-        self.mods_widget = ModsWidget(self.settings_manager, self.main.thread_manager)
-        layout.addWidget(self.mods_widget)
 
     def set_available_versions(self, versions, current=None):
         if self.mods_version_combo is None:
@@ -1308,13 +1816,14 @@ class UIComponents(QObject):
             self._add_repository_to_list(repo)
 
     def _add_repository_to_list(self, repo):
+        t = self.theme
         repo_widget = QWidget()
-        repo_widget.setStyleSheet("background-color: #f5f5f5; border-radius: 3px; border: none;")
+        repo_widget.setStyleSheet(f"background-color: {t.get('group_title_bg', '#f5f5f5')}; border-radius: 3px; border: none;")
         repo_layout = QHBoxLayout(repo_widget)
         repo_layout.setContentsMargins(10, 4, 10, 4)
 
         repo_label = QLabel(repo)
-        repo_label.setStyleSheet("font-size: 13px; border: none; background: transparent;")
+        repo_label.setStyleSheet(f"font-size: 13px; border: none; background: transparent; color: {t.get('group_title_text', '#333')};")
         repo_layout.addWidget(repo_label)
 
         delete_button = QPushButton("×")
@@ -1355,13 +1864,22 @@ class UIComponents(QObject):
                 self.cancel_button.hide()
 
     def show_settings(self):
-        self.settings_background.show()
-        self.settings_panel.show()
+        self._settings_open = True
+        self._apply_layout()
+        self._update_settings_backdrop()
+
         self.settings_background.raise_()
+        self.settings_panel.show()
         self.settings_panel.raise_()
 
+        layout = self.theme.get("layout", {})
+        if layout.get("mode", "bar") == "centered":
+            self.bar.raise_()
+
     def hide_settings(self):
-        self.settings_background.hide()
+        self._settings_open = False
+        self._apply_layout()
+        self._update_settings_backdrop()
         self.settings_panel.hide()
 
     def show_flmods(self):

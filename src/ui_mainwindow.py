@@ -9,6 +9,7 @@ from settings_manager import SettingsManager
 from download_worker import DownloadWorker
 from thread_manager import ThreadManager
 from github_client import GitHubClient
+from themes import ThemeManager
 from utils import resource_path, VERSION
 from flmods import InstallWorker
 
@@ -16,22 +17,27 @@ from flmods import InstallWorker
 class FLauncher(QMainWindow):
     repo_check_error = pyqtSignal(str)
     repo_added = pyqtSignal()
+    versions_loaded = pyqtSignal(object)
+    load_failed = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
         self.thread_manager = ThreadManager()
         self.settings_manager = SettingsManager()
         self.settings = self.settings_manager.settings
+        self.theme_manager = ThemeManager(self.settings_manager)
         self.github_client = GitHubClient(self.settings_manager)
         self.version_manager = VersionManager(self.settings_manager, self.thread_manager)
         self.download_manager = DownloadManager(self.version_manager)
         self.discord_rpc = DiscordRPC(self.settings_manager)
-        self.ui = UIComponents(self, self.settings_manager)
+        self.ui = UIComponents(self, self.settings_manager, self.theme_manager)
         self.artifact_data = {}
         self.setup_ui()
         self._connect_signals()
         self.repo_check_error.connect(lambda msg: self.show_error_message("Ошибка", msg))
         self.repo_added.connect(self.on_repo_added)
+        self.versions_loaded.connect(self._update_versions_combo)
+        self.load_failed.connect(lambda msg: self.show_error_message("Ошибка загрузки данных", msg))
         self.ui.set_username_from_config(
             self.version_manager.get_username_from_config(
                 self.ui.version_combo.currentText()
@@ -59,6 +65,8 @@ class FLauncher(QMainWindow):
         self.ui.folder_clicked.connect(self.open_versions_folder)
         self.ui.settings_clicked.connect(self.toggle_settings)
         self.ui.cancel_clicked.connect(self.cancel_download)
+        self.ui.theme_selected.connect(self.on_theme_selected)
+        self.ui.open_themes_folder_clicked.connect(self.on_open_themes_folder)
         self.github_client.releases_loaded.connect(self.ui.display_releases)
         self.github_client.error_occurred.connect(
             lambda msg: self.ui.show_release_error(msg)
@@ -88,6 +96,23 @@ class FLauncher(QMainWindow):
         self.ui.mods_widget.install_requested.connect(self.on_mod_install_requested)
         self.ui.mods_target_version_changed.connect(self.on_version_selected_for_mods)
 
+    @pyqtSlot(str)
+    def on_theme_selected(self, key):
+        if self.theme_manager.set_theme(key):
+            self.ui.apply_theme()
+            self.set_discord_presence("Сменил тему лаунчера", "", "settings")
+
+    @pyqtSlot()
+    def on_open_themes_folder(self):
+        d = self.theme_manager.user_dir()
+        if not d:
+            return
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(d)))
+
     def connect_to_discord(self):
         self.discord_rpc.connect()
 
@@ -104,12 +129,11 @@ class FLauncher(QMainWindow):
             try:
                 online_versions_info = self.version_manager.get_all_online_versions()
                 releases = self.github_client.get_releases_for_display()
-                if not self.isVisible():
-                    return
-                self._update_versions_combo(online_versions_info)
+                if self.isVisible():
+                    self.versions_loaded.emit(online_versions_info)
             except Exception as e:
                 if self.isVisible():
-                    self.show_error_message("Ошибка загрузки данных", str(e))
+                    self.load_failed.emit(str(e))
 
         future = self.thread_manager.submit(load_data)
 
@@ -149,6 +173,13 @@ class FLauncher(QMainWindow):
 
     @pyqtSlot()
     def refresh_all_data(self):
+        if getattr(self, "_refresh_in_progress", False):
+            return
+        self._refresh_in_progress = True
+        QTimer.singleShot(150, self._do_refresh_all_data)
+
+    def _do_refresh_all_data(self):
+        self._refresh_in_progress = False
         self.load_all_data()
 
     @pyqtSlot(str)
@@ -325,20 +356,51 @@ class FLauncher(QMainWindow):
             self.set_discord_presence("В настройках", "", "settings")
 
     def _update_settings_ui(self):
-        self.ui.update_discord_button_style(self.settings.get("discord_rpc_enabled", True))
-        self.ui.additional_args_input.setText(self.settings["launch_params"]["additional_args"])
-        self.ui.update_artifacts_button_style(self.settings["artifacts"]["enabled"])
-        self.ui.artifacts_count_spin.setValue(self.settings["artifacts"]["max_count"])
-        self.ui.artifacts_count_group.setVisible(self.settings["artifacts"]["enabled"])
-        self.ui.github_token_input.setText(self.settings.get("github_token", ""))
+        ui = self.ui
+        settings = self.settings
+        artifacts = settings.get("artifacts", {})
+
+        ui.refresh_themes_combo()
+        ui.update_discord_button_style(settings.get("discord_rpc_enabled", True))
+
+        if getattr(ui, "additional_args_input", None) is not None:
+            ui.additional_args_input.blockSignals(True)
+            ui.additional_args_input.setText(
+                settings.get("launch_params", {}).get("additional_args", "")
+            )
+            ui.additional_args_input.blockSignals(False)
+
+        ui.update_artifacts_button_style(artifacts.get("enabled", False))
+
+        if getattr(ui, "artifacts_count_spin", None) is not None:
+            ui.artifacts_count_spin.blockSignals(True)
+            ui.artifacts_count_spin.setValue(artifacts.get("max_count", 1))
+            ui.artifacts_count_spin.blockSignals(False)
+
+        if getattr(ui, "artifacts_count_group", None) is not None:
+            ui.artifacts_count_group.setVisible(artifacts.get("enabled", False))
+
+        if getattr(ui, "github_token_input", None) is not None:
+            ui.github_token_input.blockSignals(True)
+            ui.github_token_input.setText(settings.get("github_token", ""))
+            ui.github_token_input.blockSignals(False)
+
         self.update_token_status()
-        self.ui.load_github_repositories(self.settings.get("github_repos", []))
-        if hasattr(self.ui, 'windows_group') and self.settings_manager.system == 'win32':
-            self.ui.windows_group.setVisible(self.settings["artifacts"]["enabled"])
-            if hasattr(self.ui, 'msvc_checkbox'):
-                self.ui.msvc_checkbox.setChecked(self.settings["artifacts"]["windows"]["msvc"])
-            if hasattr(self.ui, 'clang_checkbox'):
-                self.ui.clang_checkbox.setChecked(self.settings["artifacts"]["windows"]["clang"])
+
+        if getattr(ui, "repos_layout", None) is not None:
+            ui.load_github_repositories(settings.get("github_repos", []))
+
+        if hasattr(ui, "windows_group") and self.settings_manager.system == 'win32':
+            ui.windows_group.setVisible(artifacts.get("enabled", False))
+            windows = artifacts.get("windows", {})
+            if hasattr(ui, "msvc_checkbox"):
+                ui.msvc_checkbox.blockSignals(True)
+                ui.msvc_checkbox.setChecked(windows.get("msvc", False))
+                ui.msvc_checkbox.blockSignals(False)
+            if hasattr(ui, "clang_checkbox"):
+                ui.clang_checkbox.blockSignals(True)
+                ui.clang_checkbox.setChecked(windows.get("clang", True))
+                ui.clang_checkbox.blockSignals(False)
 
     def show_error_message(self, title, message):
         msg = QMessageBox()
