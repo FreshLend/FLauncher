@@ -14,10 +14,10 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.10'
           architecture: 'x64'
@@ -50,7 +50,7 @@ jobs:
         shell: pwsh
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: FLauncher-${{ steps.version.outputs.VERSION }}_win64
           path: dist/FLauncher-${{ steps.version.outputs.VERSION }}_win64.exe
@@ -60,10 +60,10 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.10'
 
@@ -134,7 +134,7 @@ jobs:
           mv FLauncher-*.AppImage "FLauncher-${{ steps.version.outputs.VERSION }}_x86-64.AppImage"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: FLauncher-${{ steps.version.outputs.VERSION }}_x86-64
           path: FLauncher-${{ steps.version.outputs.VERSION }}_x86-64.AppImage
@@ -144,10 +144,10 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.10'
 
@@ -178,7 +178,7 @@ jobs:
             "FLauncher-${{ steps.version.outputs.VERSION }}_macos.dmg"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: FLauncher-${{ steps.version.outputs.VERSION }}_macos
           path: FLauncher-${{ steps.version.outputs.VERSION }}_macos.dmg
