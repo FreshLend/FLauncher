@@ -387,6 +387,7 @@ class UIComponents(QObject):
         self.mods_widget = None
         self.mods_version_combo = None
         self.theme_combo = None
+        self.reload_theme_btn = None
         self.open_themes_button = None
         self.launch_params_label = None
         self._settings_open = False
@@ -408,6 +409,7 @@ class UIComponents(QObject):
 
     def apply_theme(self):
         self.theme = self.theme_manager.current
+        self.set_background()
         self._apply_bar_theme()
         self._apply_release_panel_theme()
         self._apply_info_panel_theme()
@@ -594,7 +596,19 @@ class UIComponents(QObject):
     def set_background(self):
         self.main.setAutoFillBackground(True)
         palette = self.main.palette()
-        image = QImage(resource_path('ui/background.png'))
+
+        bg_path = None
+        try:
+            bg_path = self.theme_manager.get_background()
+        except Exception:
+            bg_path = None
+
+        image = QImage()
+        if bg_path:
+            image = QImage(str(bg_path))
+        if image.isNull():
+            image = QImage(resource_path('ui/background.png'))
+
         brush = QBrush(image)
         palette.setBrush(QPalette.ColorRole.Window, brush)
         self.main.setPalette(palette)
@@ -677,6 +691,11 @@ class UIComponents(QObject):
         self.settings_button.setIcon(icon_settings)
         self.settings_button.setIconSize(QSize(30, 30))
         self.settings_button.clicked.connect(self.settings_clicked)
+
+        for btn in (self.flm_button, self.reload_button, self.folder_button, self.settings_button):
+            btn.setFlat(False)
+            btn.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            btn.setAutoFillBackground(False)
 
         self._apply_bar_theme()
 
@@ -770,20 +789,64 @@ class UIComponents(QObject):
             }}
         """)
 
+        icon_bg = t.get("icon_bg", "transparent")
+        icon_border = t.get("icon_border", "transparent")
+        icon_radius = int(t.get("icon_radius", 5))
+        icon_hover = t.get("icon_hover", "rgba(255, 255, 255, 0.1)")
+        icon_pressed = t.get("icon_pressed", icon_hover)
+
         icon_style = f"""
             QPushButton {{
-                border: none;
-                background-color: transparent;
+                border: 1px solid {icon_border};
+                background-color: {icon_bg};
                 padding: 0;
                 outline: none;
+                border-radius: {icon_radius}px;
+            }}
+            QPushButton:flat {{
+                background-color: {icon_bg};
+                border: 1px solid {icon_border};
             }}
             QPushButton:hover {{
-                background-color: {t.get('icon_hover', 'rgba(255, 255, 255, 0.1)')};
-                border-radius: 5px;
+                background-color: {icon_hover};
+                border: 1px solid {icon_border};
+            }}
+            QPushButton:pressed {{
+                background-color: {icon_pressed};
+                border: 1px solid {icon_border};
+            }}
+            QPushButton:checked {{
+                background-color: {icon_hover};
+                border: 1px solid {icon_border};
             }}
         """
         for btn in (self.flm_button, self.reload_button, self.folder_button, self.settings_button):
             btn.setStyleSheet(icon_style)
+
+        defaults = {
+            "flm": "ui/FLM.png",
+            "reload": "ui/reload.png",
+            "folder": "ui/folder.png",
+            "settings": "ui/settings.png",
+        }
+        buttons = {
+            "flm": self.flm_button,
+            "reload": self.reload_button,
+            "folder": self.folder_button,
+            "settings": self.settings_button,
+        }
+        icons = t.get("icons") or {}
+        for name, btn in buttons.items():
+            if btn is None:
+                continue
+            path = None
+            rel = icons.get(name)
+            if rel:
+                path = self.theme_manager.resolve_file(rel)
+            if path:
+                btn.setIcon(QIcon(str(path)))
+            else:
+                btn.setIcon(QIcon(resource_path(defaults[name])))
 
     def add_release_panel(self):
         self.release_panel = QWidget(self.main)
@@ -1271,6 +1334,34 @@ class UIComponents(QObject):
                 }}
             """)
 
+        if self.reload_theme_btn:
+            self.reload_theme_btn.setStyleSheet(f"""
+                QPushButton {{
+                    font-size: 16px;
+                    font-weight: bold;
+                    background-color: {t.get('input_field_bg', 'white')};
+                    color: {t.get('input_field_text', 'black')};
+                    border: 1px solid {t.get('input_field_border', '#CCC')};
+                    border-radius: 3px;
+                }}
+                QPushButton:hover {{
+                    background-color: {t.get('accent', '#3498db')};
+                    color: white;
+                    border: 1px solid {t.get('accent', '#3498db')};
+                }}
+                QPushButton:pressed {{
+                    background-color: {t.get('accent_hover', '#2980b9')};
+                    color: white;
+                }}
+                QToolTip {{
+                    background-color: {t.get('input_field_bg', 'white')};
+                    color: {t.get('input_field_text', 'black')};
+                    border: 1px solid {t.get('input_field_border', '#CCC')};
+                    padding: 6px 10px;
+                    border-radius: 4px;
+                }}
+            """)
+
         if self.artifacts_count_spin:
             self.artifacts_count_spin.setStyleSheet(f"""
                 QSpinBox {{
@@ -1454,22 +1545,23 @@ class UIComponents(QObject):
         theme_row.setSpacing(10)
 
         self.theme_combo = QComboBox()
-        for key, name in self.theme_manager.available():
-            self.theme_combo.addItem(name, key)
-        current_key = self.theme_manager.current_key
-        for i in range(self.theme_combo.count()):
-            if self.theme_combo.itemData(i) == current_key:
-                self.theme_combo.setCurrentIndex(i)
-                break
+        self._populate_theme_combo()
         self.theme_combo.currentIndexChanged.connect(self._on_theme_combo_changed)
+
+        self.reload_theme_btn = QPushButton("↻")
+        self.reload_theme_btn.setFixedSize(30, 30)
+        self.reload_theme_btn.setToolTip("Перезагрузить список тем и применить текущую заново")
+        self.reload_theme_btn.clicked.connect(self._on_reload_theme)
 
         self.open_themes_button = QPushButton("Открыть папку тем")
         self.open_themes_button.setFixedHeight(30)
         self.open_themes_button.clicked.connect(self._on_open_themes_folder)
 
         theme_row.addWidget(self.theme_combo, 1)
+        theme_row.addWidget(self.reload_theme_btn)
         theme_row.addWidget(self.open_themes_button)
         th_layout.addLayout(theme_row)
+
         layout.addWidget(theme_group)
 
         artifacts_group, artifacts_container, artifacts_title = self._create_group_box("Артефакты")
@@ -1665,27 +1757,70 @@ class UIComponents(QObject):
         self.group_boxes.append((group_box, title_label, content_container))
         return group_box, content_container, title_label
 
-    def _on_theme_combo_changed(self, index):
-        if index < 0:
-            return
-        key = self.theme_combo.itemData(index)
-        if key:
-            self.theme_selected.emit(key)
-
-    def refresh_themes_combo(self):
+    def _populate_theme_combo(self):
         if self.theme_combo is None:
             return
-        self.theme_manager.reload()
         self.theme_combo.blockSignals(True)
         self.theme_combo.clear()
-        for key, name in self.theme_manager.available():
-            self.theme_combo.addItem(name, key)
+        for key, label in self.theme_manager.all_labels():
+            self.theme_combo.addItem(label, key)
         current_key = self.theme_manager.current_key
         for i in range(self.theme_combo.count()):
             if self.theme_combo.itemData(i) == current_key:
                 self.theme_combo.setCurrentIndex(i)
                 break
         self.theme_combo.blockSignals(False)
+
+    def _on_theme_combo_changed(self, index):
+        if index < 0:
+            return
+        key = self.theme_combo.itemData(index)
+        if not key:
+            return
+        if key == self.theme_manager.current_key:
+            return
+        self.theme_selected.emit(key)
+
+    def _on_reload_theme(self):
+        saved_key = self.theme_manager.current_key
+
+        self.theme_manager.reload()
+
+        if saved_key in self.theme_manager.themes:
+            self.theme_manager.current_key = saved_key
+        elif self.theme_manager.themes:
+            self.theme_manager.current_key = next(iter(self.theme_manager.themes))
+
+        self.theme = self.theme_manager.current
+
+        self._populate_theme_combo()
+        self.apply_theme()
+
+        widgets = [
+            self.main,
+            self.bar,
+            self.release_panel,
+            self.info_panel,
+            self.settings_panel,
+            self.settings_header_strip,
+            self.FL_MODS,
+            self.flmods_header_strip,
+        ]
+        for w in widgets:
+            if w is None:
+                continue
+            try:
+                w.style().unpolish(w)
+                w.style().polish(w)
+                w.update()
+            except Exception:
+                pass
+
+    def refresh_themes_combo(self):
+        if self.theme_combo is None:
+            return
+        self.theme_manager.reload()
+        self._populate_theme_combo()
 
     def _on_open_themes_folder(self):
         self.open_themes_folder_clicked.emit()
@@ -1722,7 +1857,11 @@ class UIComponents(QObject):
 
         layout = QVBoxLayout(self.FL_MODS)
         layout.setContentsMargins(0, 50, 0, 0)
-        self.mods_widget = ModsWidget(self.settings_manager, self.main.thread_manager)
+        self.mods_widget = ModsWidget(
+            self.settings_manager,
+            self.main.thread_manager,
+            theme_manager=self.theme_manager,
+        )
         layout.addWidget(self.mods_widget)
 
         self._apply_flmods_theme()
@@ -1773,6 +1912,14 @@ class UIComponents(QObject):
                 border-radius: 15px;
             }
         """)
+
+        if self.mods_widget is not None:
+            try:
+                self.mods_widget.theme_manager = self.theme_manager
+                self.mods_widget.apply_theme()
+                self.mods_widget.installed_sidebar.apply_theme()
+            except Exception:
+                pass
 
     def set_available_versions(self, versions, current=None):
         if self.mods_version_combo is None:

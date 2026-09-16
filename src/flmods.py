@@ -357,26 +357,19 @@ class VersionDownloaderThread(QThread):
 
 
 class InstalledSidebar(QWidget):
-    def __init__(self, settings_manager, parent=None):
+    def __init__(self, settings_manager, theme_manager=None, parent=None):
         super().__init__(parent)
         self.settings_manager = settings_manager
+        self.theme_manager = theme_manager
         self.version_folder = None
         self.setFixedWidth(260)
-        self.setStyleSheet("background-color: #ffffff; border-right: 1px solid #e0e0e0;")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(8)
 
-        title = QLabel("Установлено")
-        title.setStyleSheet("""
-            font-size: 14px;
-            font-weight: bold;
-            color: #333;
-            background: transparent;
-            border: none;
-        """)
-        layout.addWidget(title)
+        self.title_label = QLabel("Установлено")
+        layout.addWidget(self.title_label)
 
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
@@ -400,7 +393,7 @@ class InstalledSidebar(QWidget):
         """)
 
         self.items_container = QWidget()
-        self.items_container.setStyleSheet("background: transparent;")
+        self.items_container.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.items_layout = QVBoxLayout(self.items_container)
         self.items_layout.setContentsMargins(0, 0, 0, 0)
         self.items_layout.setSpacing(4)
@@ -409,6 +402,31 @@ class InstalledSidebar(QWidget):
 
         layout.addWidget(self.scroll, 1)
 
+        self.apply_theme()
+        self.refresh()
+
+    def _theme(self):
+        if self.theme_manager is None:
+            return {}
+        return self.theme_manager.current
+
+    def apply_theme(self):
+        t = self._theme()
+        sidebar_bg = t.get("flmods_sidebar_bg", "#ffffff")
+        sidebar_border = t.get("flmods_sidebar_border", "#e0e0e0")
+        title_color = t.get("flmods_title_text", "#333333")
+
+        self.setStyleSheet(
+            f"background-color: {sidebar_bg}; border-right: 1px solid {sidebar_border};"
+        )
+        self.title_label.setStyleSheet(f"""
+            font-size: 14px;
+            font-weight: bold;
+            color: {title_color};
+            background: transparent;
+            border: none;
+        """)
+        self.items_container.setStyleSheet("background: transparent;")
         self.refresh()
 
     def set_version(self, version_folder):
@@ -466,10 +484,12 @@ class InstalledSidebar(QWidget):
             self.items_layout.addWidget(self._create_item(folder, enabled=False))
 
     def _show_empty(self):
+        t = self._theme()
+        color = t.get("flmods_meta_text", "#999999")
         empty = QLabel("Ничего не установлено")
-        empty.setStyleSheet("""
+        empty.setStyleSheet(f"""
             font-size: 12px;
-            color: #999;
+            color: {color};
             background: transparent;
             border: none;
             padding: 20px 5px;
@@ -479,13 +499,21 @@ class InstalledSidebar(QWidget):
         self.items_layout.addWidget(empty)
 
     def _create_item(self, folder, enabled):
+        t = self._theme()
+        item_bg = t.get("flmods_sidebar_item_bg", "#f5f5f5")
+        title_color = t.get("flmods_title_text", "#333333")
+        muted_color = t.get("flmods_meta_text", "#999999")
+        accent = t.get("accent", "#2ecc71")
+        border_color = t.get("flmods_sidebar_border", "#999999")
+
         item = QWidget()
-        item.setStyleSheet("""
-            QWidget {
-                background-color: #f5f5f5;
+        item.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        item.setStyleSheet(f"""
+            QWidget {{
+                background-color: {item_bg};
                 border-radius: 4px;
                 border: none;
-            }
+            }}
         """)
         item_layout = QHBoxLayout(item)
         item_layout.setContentsMargins(6, 6, 6, 6)
@@ -494,27 +522,27 @@ class InstalledSidebar(QWidget):
         checkbox = QCheckBox()
         checkbox.setChecked(enabled)
         checkbox.setFixedSize(18, 18)
-        checkbox.setStyleSheet("""
-            QCheckBox {
+        checkbox.setStyleSheet(f"""
+            QCheckBox {{
                 background: transparent;
                 border: none;
                 spacing: 0px;
-            }
-            QCheckBox::indicator {
+            }}
+            QCheckBox::indicator {{
                 width: 16px;
                 height: 16px;
-                border: 1px solid #999;
+                border: 1px solid {border_color};
                 border-radius: 3px;
-                background-color: white;
-            }
-            QCheckBox::indicator:hover {
-                border: 1px solid #3498db;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #2ecc71;
-                border: 1px solid #27ae60;
+                background-color: {t.get('flmods_sidebar_bg', 'white')};
+            }}
+            QCheckBox::indicator:hover {{
+                border: 1px solid {accent};
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {accent};
+                border: 1px solid {accent};
                 image: none;
-            }
+            }}
         """)
         checkbox.stateChanged.connect(
             lambda state, f=folder, e=enabled: self._on_toggle(f, e, state)
@@ -523,7 +551,7 @@ class InstalledSidebar(QWidget):
 
         icon_label = QLabel()
         icon_label.setFixedSize(32, 32)
-        icon_label.setStyleSheet("background-color: #ddd; border-radius: 4px; border: none;")
+        icon_label.setStyleSheet("background-color: transparent; border-radius: 4px; border: none;")
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         icon_path = folder / "icon.png"
@@ -542,9 +570,6 @@ class InstalledSidebar(QWidget):
         if not loaded:
             icon_label.setText("?")
 
-        if not enabled:
-            icon_label.setStyleSheet("background-color: #ddd; border-radius: 4px; border: none; opacity: 0.5;")
-
         title = folder.name
         pkg_path = folder / "package.json"
         if pkg_path.exists():
@@ -552,24 +577,24 @@ class InstalledSidebar(QWidget):
                 with open(pkg_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     if isinstance(data, dict):
-                        t = data.get('title') or data.get('name')
-                        if t:
-                            title = str(t)
+                        tt = data.get('title') or data.get('name')
+                        if tt:
+                            title = str(tt)
             except Exception:
                 pass
 
         title_label = QLabel(title)
         if enabled:
-            title_label.setStyleSheet("""
+            title_label.setStyleSheet(f"""
                 font-size: 12px;
-                color: #333;
+                color: {title_color};
                 background: transparent;
                 border: none;
             """)
         else:
-            title_label.setStyleSheet("""
+            title_label.setStyleSheet(f"""
                 font-size: 12px;
-                color: #999;
+                color: {muted_color};
                 background: transparent;
                 border: none;
             """)
@@ -650,7 +675,7 @@ class ModCard(QFrame):
     install_clicked = pyqtSignal(int, str, str, str)
 
     def __init__(self, mod_data, content_type="mods", cached_version=None,
-                 image_cache=None, parent=None):
+                 image_cache=None, theme_manager=None, parent=None):
         super().__init__(parent)
         if not isinstance(mod_data, dict):
             mod_data = {}
@@ -659,19 +684,9 @@ class ModCard(QFrame):
         self.content_type = content_type
         self.icon_url = mod_data.get("logo_url") or mod_data.get("icon")
         self.image_cache = image_cache if image_cache else {}
+        self.theme_manager = theme_manager
 
         self.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setStyleSheet("""
-            QFrame {
-                background-color: #f5f5f5;
-                border: 1px solid #dcdcdc;
-                border-radius: 8px;
-                margin: 4px;
-            }
-            QFrame:hover {
-                border: 1px solid #3498db;
-            }
-        """)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
@@ -696,16 +711,16 @@ class ModCard(QFrame):
             author_name = author_data
 
         info_layout = QVBoxLayout()
-        title_label = QLabel(self.mod_title)
-        title_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        info_layout.addWidget(title_label)
-        author_label = QLabel(f"Автор: {author_name}")
-        author_label.setStyleSheet("color: #555;")
-        info_layout.addWidget(author_label)
-        desc_label = QLabel(str(mod_data.get("description", ""))[:300] + "...")
-        desc_label.setWordWrap(True)
-        desc_label.setStyleSheet("color: #777;")
-        info_layout.addWidget(desc_label)
+        self.title_label = QLabel(self.mod_title)
+        self.title_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        info_layout.addWidget(self.title_label)
+
+        self.author_label = QLabel(f"Автор: {author_name}")
+        info_layout.addWidget(self.author_label)
+
+        self.desc_label = QLabel(str(mod_data.get("description", ""))[:300] + "...")
+        self.desc_label.setWordWrap(True)
+        info_layout.addWidget(self.desc_label)
 
         downloads = mod_data.get('downloads', 0)
         raw_date = mod_data.get("last_update_date", "")
@@ -714,66 +729,123 @@ class ModCard(QFrame):
         if cached_version:
             self.version_text = f"Версия: {cached_version}"
 
-        meta_label = QLabel(f"Загрузок: {downloads} | Обновлено: {updated}")
-        meta_label.setStyleSheet("color: #999; font-size: 10px;")
+        self.meta_label = QLabel(f"Загрузок: {downloads} | Обновлено: {updated}")
         self.version_label = QLabel(self.version_text)
-        self.version_label.setStyleSheet("color: #999; font-size: 10px;")
-        info_layout.addWidget(meta_label)
+        info_layout.addWidget(self.meta_label)
         info_layout.addWidget(self.version_label)
         layout.addLayout(info_layout, stretch=1)
 
         self.action_btn = QPushButton("Установить")
         self.action_btn.setFixedSize(120, 35)
-        self._apply_install_style()
         self.action_btn.clicked.connect(self._on_install)
         layout.addWidget(self.action_btn)
 
+        self._current_state = "install"
+        self.apply_theme()
+
+    def _theme(self):
+        if self.theme_manager is None:
+            return {}
+        return self.theme_manager.current
+
+    def apply_theme(self):
+        t = self._theme()
+        card_bg = t.get("flmods_card_bg", "#f5f5f5")
+        card_border = t.get("flmods_card_border", "#dcdcdc")
+        hover_border = t.get("accent", "#3498db")
+        title_color = t.get("flmods_title_text", "#222222")
+        body_color = t.get("flmods_body_text", "#555555")
+        meta_color = t.get("flmods_meta_text", "#999999")
+
+        self.setStyleSheet(f"""
+            QFrame {{
+                background-color: {card_bg};
+                border: 1px solid {card_border};
+                border-radius: 8px;
+                margin: 4px;
+            }}
+            QFrame:hover {{
+                border: 1px solid {hover_border};
+            }}
+        """)
+
+        self.title_label.setStyleSheet(f"""
+            font-size: 12px;
+            font-weight: bold;
+            color: {title_color};
+            background: transparent;
+            border: none;
+        """)
+        self.author_label.setStyleSheet(f"color: {body_color}; background: transparent; border: none;")
+        self.desc_label.setStyleSheet(f"color: {body_color}; background: transparent; border: none;")
+        self.meta_label.setStyleSheet(f"color: {meta_color}; font-size: 10px; background: transparent; border: none;")
+        self.version_label.setStyleSheet(f"color: {meta_color}; font-size: 10px; background: transparent; border: none;")
+
+        self._reapply_button_style()
+
+    def _reapply_button_style(self):
+        if self._current_state == "install":
+            self._apply_install_style()
+        elif self._current_state == "reinstall":
+            self._apply_reinstall_style()
+        elif self._current_state == "update":
+            self._apply_update_style()
+
     def _apply_install_style(self):
-        self.action_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2ecc71;
+        t = self._theme()
+        bg = t.get("install_bg", "#2ecc71")
+        hover = t.get("install_hover", "#27ae60")
+        self.action_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {bg};
                 color: white;
                 border-radius: 5px;
                 font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #27ae60;
-            }
-            QPushButton:disabled {
+            }}
+            QPushButton:hover {{
+                background-color: {hover};
+            }}
+            QPushButton:disabled {{
                 background-color: #bdc3c7;
-            }
+            }}
         """)
 
     def _apply_reinstall_style(self):
-        self.action_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #f39c12;
+        t = self._theme()
+        bg = t.get("reinstall_bg", "#f39c12")
+        hover = t.get("reinstall_hover", "#e67e22")
+        self.action_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {bg};
                 color: white;
                 border-radius: 5px;
                 font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #e67e22;
-            }
-            QPushButton:disabled {
+            }}
+            QPushButton:hover {{
+                background-color: {hover};
+            }}
+            QPushButton:disabled {{
                 background-color: #bdc3c7;
-            }
+            }}
         """)
 
     def _apply_update_style(self):
-        self.action_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db;
+        t = self._theme()
+        bg = t.get("update_bg", "#3498db")
+        hover = t.get("update_hover", "#2980b9")
+        self.action_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {bg};
                 color: white;
                 border-radius: 5px;
                 font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-            QPushButton:disabled {
+            }}
+            QPushButton:hover {{
+                background-color: {hover};
+            }}
+            QPushButton:disabled {{
                 background-color: #bdc3c7;
-            }
+            }}
         """)
 
     def set_image_from_data(self, data):
@@ -788,11 +860,13 @@ class ModCard(QFrame):
             self.icon_label.setText("Err")
 
     def update_version(self, version):
-        self.version_label.setText(f"Версия: {version}")
+        self.version_text = f"Версия: {version}"
+        self.version_label.setText(self.version_text)
 
     def set_installed(self, installed, latest_version=None, installed_version=None):
         if not installed:
             self.action_btn.setText("Установить")
+            self._current_state = "install"
             self._apply_install_style()
             return
 
@@ -803,9 +877,11 @@ class ModCard(QFrame):
 
         if has_update:
             self.action_btn.setText("Обновить")
+            self._current_state = "update"
             self._apply_update_style()
         else:
             self.action_btn.setText("Переустановить")
+            self._current_state = "reinstall"
             self._apply_reinstall_style()
 
     def _on_install(self):
@@ -947,10 +1023,11 @@ class InstallWorker(QThread):
 class ModsWidget(QWidget):
     install_requested = pyqtSignal(int, str, str, str)
 
-    def __init__(self, settings_manager, thread_manager, parent=None):
+    def __init__(self, settings_manager, thread_manager, theme_manager=None, parent=None):
         super().__init__(parent)
         self.settings_manager = settings_manager
         self.thread_manager = thread_manager
+        self.theme_manager = theme_manager
         self.target_version_folder = None
         self.installed_items = set()
         self.installed_versions = {}
@@ -988,9 +1065,9 @@ class ModsWidget(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        top_bar = QWidget()
-        top_bar.setStyleSheet("background-color: #3498db; color: white;")
-        top_layout = QHBoxLayout(top_bar)
+        self.top_bar = QWidget()
+        self.top_bar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        top_layout = QHBoxLayout(self.top_bar)
         top_layout.setContentsMargins(15, 10, 15, 10)
 
         self.btn_mods = QPushButton("Моды")
@@ -1001,33 +1078,12 @@ class ModsWidget(QWidget):
                             self.btn_maps: "worlds"}
 
         for btn, tab in self.tab_buttons.items():
-            btn.setStyleSheet("""
-                QPushButton {
-                    background: transparent;
-                    color: white;
-                    border: none;
-                    padding: 8px;
-                    font-weight: bold;
-                }
-                QPushButton:hover {
-                    background-color: rgba(255,255,255,0.1);
-                }
-            """)
             btn.clicked.connect(lambda checked, b=btn, t=tab: self.switch_tab(b, t))
             top_layout.addWidget(btn)
 
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("Поиск по названию...")
         self.search_bar.setFixedWidth(250)
-        self.search_bar.setStyleSheet("""
-            QLineEdit {
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                padding: 5px;
-                background-color: white;
-                color: black;
-            }
-        """)
         self.search_bar.textChanged.connect(self.on_search_text_changed)
         top_layout.addWidget(self.search_bar)
 
@@ -1035,62 +1091,34 @@ class ModsWidget(QWidget):
         self.tag_combo.setMinimumWidth(150)
         self.tag_combo.addItem("Все теги", None)
         self.tag_combo.currentTextChanged.connect(self.on_tag_changed)
-        self.tag_combo.setStyleSheet("""
-            QComboBox {
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                padding: 4px;
-                background-color: white;
-                color: black;
-            }
-        """)
         top_layout.addWidget(self.tag_combo)
 
         self.sort_combo = QComboBox()
         self.sort_combo.addItems(["Популярные", "Новые", "По алфавиту"])
         self.sort_combo.currentTextChanged.connect(self.on_sort_changed)
-        self.sort_combo.setStyleSheet("""
-            QComboBox {
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                padding: 4px;
-                background-color: white;
-                color: black;
-            }
-        """)
         top_layout.addWidget(self.sort_combo)
 
         self.btn_refresh = QPushButton("Обновить")
-        self.btn_refresh.setStyleSheet("""
-            QPushButton {
-                background-color: white;
-                color: #3498db;
-                font-weight: bold;
-                padding: 5px 15px;
-                border: none;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #ecf0f1;
-            }
-        """)
         self.btn_refresh.clicked.connect(self.force_refresh_current_tab)
         top_layout.addWidget(self.btn_refresh)
 
-        main_layout.addWidget(top_bar)
+        main_layout.addWidget(self.top_bar)
 
         body = QWidget()
+        body.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.body = body
         body_layout = QHBoxLayout(body)
         body_layout.setContentsMargins(0, 0, 0, 0)
         body_layout.setSpacing(0)
 
-        self.installed_sidebar = InstalledSidebar(settings_manager)
+        self.installed_sidebar = InstalledSidebar(settings_manager, theme_manager=theme_manager)
         body_layout.addWidget(self.installed_sidebar)
 
         self.mods_scroll = QScrollArea()
         self.mods_scroll.setWidgetResizable(True)
         self.mods_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.mods_content = QWidget()
+        self.mods_content.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.mods_layout = QVBoxLayout(self.mods_content)
         self.mods_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.mods_scroll.setWidget(self.mods_content)
@@ -1098,6 +1126,8 @@ class ModsWidget(QWidget):
         body_layout.addWidget(self.mods_scroll, 1)
 
         main_layout.addWidget(body, 1)
+
+        self.apply_theme()
 
     def _cleanup_old_workers(self):
         alive = []
@@ -1108,6 +1138,129 @@ class ModsWidget(QWidget):
             except RuntimeError:
                 pass
         self._old_workers = alive
+
+    def _theme(self):
+        if self.theme_manager is None:
+            return {}
+        return self.theme_manager.current
+
+    def apply_theme(self):
+        t = self._theme()
+
+        accent = t.get("accent", "#3498db")
+        topbar_bg = t.get("flmods_topbar_bg", "#3498db")
+        topbar_text = t.get("flmods_topbar_text", "white")
+        tab_active_bg = t.get("flmods_tab_active_bg", "white")
+        tab_active_text = t.get("flmods_tab_active_text", accent)
+
+        input_bg = t.get("input_field_bg", "white")
+        input_text = t.get("input_field_text", "black")
+        input_border = t.get("input_field_border", "#ccc")
+
+        bg = t.get("flmods_bg", t.get("settings_bg", "white"))
+        scrollbar_bg = t.get("flmods_sidebar_item_bg", "#f0f0f0")
+
+        self.top_bar.setStyleSheet(f"background-color: {topbar_bg};")
+        self.body.setStyleSheet(f"background-color: {bg};")
+
+        self.mods_content.setStyleSheet(f"background-color: {bg};")
+        self.mods_scroll.setStyleSheet(f"""
+            QScrollArea {{ border: none; background-color: {bg}; }}
+            QScrollArea > QWidget > QWidget {{ background-color: {bg}; }}
+            QScrollBar:vertical {{
+                border: none;
+                background: {scrollbar_bg};
+                width: 10px;
+                margin: 0px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: #C0C0C0;
+                min-height: 20px;
+                border-radius: 5px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: #A0A0A0;
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px;
+            }}
+        """)
+
+        for btn in self.tab_buttons.keys():
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: transparent;
+                    color: {topbar_text};
+                    border: none;
+                    padding: 8px;
+                    font-weight: bold;
+                }}
+                QPushButton:hover {{
+                    background-color: rgba(255,255,255,0.1);
+                    border-radius: 4px;
+                }}
+            """)
+
+        active = self.get_active_button()
+        active.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {tab_active_bg};
+                color: {tab_active_text};
+                border: none;
+                padding: 8px;
+                font-weight: bold;
+                border-radius: 4px;
+            }}
+        """)
+
+        self.search_bar.setStyleSheet(f"""
+            QLineEdit {{
+                border: 1px solid {input_border};
+                border-radius: 4px;
+                padding: 5px;
+                background-color: {input_bg};
+                color: {input_text};
+            }}
+        """)
+
+        combo_qss = f"""
+            QComboBox {{
+                border: 1px solid {input_border};
+                border-radius: 4px;
+                padding: 4px;
+                background-color: {input_bg};
+                color: {input_text};
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {input_bg};
+                color: {input_text};
+                selection-background-color: {accent};
+                selection-color: white;
+                outline: none;
+            }}
+        """
+        self.tag_combo.setStyleSheet(combo_qss)
+        self.sort_combo.setStyleSheet(combo_qss)
+
+        self.btn_refresh.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {tab_active_bg};
+                color: {tab_active_text};
+                font-weight: bold;
+                padding: 5px 15px;
+                border: none;
+                border-radius: 4px;
+            }}
+            QPushButton:hover {{
+                background-color: {input_bg};
+            }}
+        """)
+
+        if self.installed_sidebar:
+            self.installed_sidebar.apply_theme()
+
+        for card in self.active_cards.values():
+            card.apply_theme()
 
     def start(self):
         if self._is_active:
@@ -1143,6 +1296,7 @@ class ModsWidget(QWidget):
             worker.start()
             self.version_workers.append(worker)
 
+        self.apply_theme()
         self.installed_sidebar.refresh()
         self._reload_installed_versions()
         self.reload_data()
@@ -1688,7 +1842,8 @@ class ModsWidget(QWidget):
         for mod in filtered:
             cached_ver = self.version_cache.get(mod.get('id'))
             card = ModCard(mod, content_type=self.current_tab,
-                           cached_version=cached_ver, image_cache=self.image_cache)
+                           cached_version=cached_ver, image_cache=self.image_cache,
+                           theme_manager=self.theme_manager)
             card.image_requested.connect(self.fetch_image)
             card.install_clicked.connect(self._on_card_install)
             self.mods_layout.addWidget(card)
