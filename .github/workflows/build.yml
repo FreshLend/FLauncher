@@ -36,7 +36,7 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $content = Get-Content -Path src/utils.py -Raw
+          $content = Get-Content -Path src/utils/constants.py -Raw
           $pattern = 'VERSION\s*=\s*[''"]([^''"]+)[''"]'
           $match = [regex]::Match($content, $pattern)
           $VERSION = if ($match.Success) { $match.Groups[1].Value } else { "${{ github.event.inputs.version }}" }
@@ -80,7 +80,7 @@ jobs:
       - name: Get version
         id: version
         run: |
-          VERSION=$(grep -oP 'VERSION\s*=\s*["'"'"']\K[^"'"'"']+' src/utils.py | head -1)
+          VERSION=$(grep -oP 'VERSION\s*=\s*["'"'"']\K[^"'"'"']+' src/utils/constants.py | head -1)
           echo "VERSION=${VERSION:-${{ github.event.inputs.version }}}" >> $GITHUB_OUTPUT
 
       - name: Prepare binary
@@ -163,7 +163,7 @@ jobs:
       - name: Get version
         id: version
         run: |
-          VERSION=$(grep -oE 'VERSION[[:space:]]*=[[:space:]]*"[^"]+"' src/utils.py | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          VERSION=$(grep -oE 'VERSION[[:space:]]*=[[:space:]]*"[^"]+"' src/utils/constants.py | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
           echo "VERSION=${VERSION:-${{ github.event.inputs.version }}}" >> $GITHUB_OUTPUT
 
       - name: Create DMG
