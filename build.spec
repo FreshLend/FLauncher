@@ -14,15 +14,19 @@ spec_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
 src_path = os.path.join(spec_dir, 'src')
 
 def get_version_from_file():
-    utils_path = os.path.join(src_path, 'utils.py')
-    try:
-        with open(utils_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-            match = re.search(r'VERSION\s*=\s*["\']([^"\']+)["\']', content)
-            if match:
-                return match.group(1)
-    except Exception as e:
-        print(f"Не удалось прочитать версию из {utils_path}: {e}")
+    candidates = [
+        os.path.join(src_path, 'utils', 'constants.py'),
+        os.path.join(src_path, 'utils.py'),
+    ]
+    for utils_path in candidates:
+        try:
+            with open(utils_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                match = re.search(r'VERSION\s*=\s*["\']([^"\']+)["\']', content)
+                if match:
+                    return match.group(1)
+        except Exception as e:
+            print(f"Не удалось прочитать версию из {utils_path}: {e}")
     return "v0.0.0"
 
 VERSION = get_version_from_file()
@@ -65,15 +69,21 @@ a = Analysis(
     binaries=[],
     datas=[
         ('src/ui/images', 'ui/images'),
-        ('src/themes', 'themes'),
+        ('src/ui/langs', 'ui/langs'),
+        ('src/ui/themes', 'ui/themes'),
     ],
     hiddenimports=[
         'flmods',
         'flmods.api',
         'flmods.workers',
-        'flmods.widgets',
+        'flmods.catalog',
         'ui',
         'ui.widgets',
+        'utils',
+        'utils.constants',
+        'utils.paths',
+        'utils.platform',
+        'utils.archive',
     ],
     hookspath=[],
     hooksconfig={},
@@ -120,5 +130,4 @@ if is_macos:
             'CFBundleName': f'FLauncher {VERSION}',
             'CFBundleDisplayName': f'FLauncher {VERSION}',
         }
-
     )

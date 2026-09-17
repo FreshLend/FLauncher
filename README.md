@@ -1,5 +1,7 @@
 # FLauncher
 
+[English version](README.EN.md)
+
 Лаунчер для [VoxelCore](https://github.com/MihailRis/VoxelCore), написанный на Python. Имеет полную кастомизацию — от цветов до расположения интерфейса.
 
 ## Особенности
@@ -29,10 +31,10 @@ pyinstaller build.spec
 ```
 src/
 ├── main.py                     точка входа
-├── utils.py                    ресурсы, версия, утилиты
 ├── logging_setup.py            настройка логирования
 ├── settings_manager.py         сохранение настроек и путей
 ├── thread_manager.py           пул потоков
+├── i18n.py                     локализация
 ├── github_client.py            запросы к GitHub API
 ├── version_manager.py          управление версиями VoxelCore
 ├── download_manager.py         скачивание и распаковка
@@ -42,13 +44,26 @@ src/
 ├── update_checker.py           проверка обновлений лаунчера
 ├── ui_mainwindow.py            главное окно
 ├── ui_components.py            верхнеуровневые компоненты UI
+├── utils/                      утилиты
+│   ├── __init__.py             реэкспорт публичных функций
+│   ├── constants.py            VERSION, MAIN_REPO, MAX_LOAD
+│   ├── paths.py                resource_path
+│   ├── platform.py             определение платформы и паттернов
+│   └── archive.py              safe_extract_zip
 ├── ui/
+│   ├── __init__.py             реэкспорт публичных функций
 │   ├── widgets.py              кастомные виджеты
-│   └── images/                 иконки и фоны
+│   ├── images/                 иконки и фоны
+│   ├── langs/                  языковые файлы (JSON)
+│   └── themes/                 встроенные темы
+│       └── FLauncher/
+│           ├── tlauncher.json
+│           ├── legacy.json
+│           └── dark.legacy.json
 └── flmods/
     ├── api.py                  VoxelWorld API
     ├── workers.py              воркеры FLMODS
-    └── widgets.py              UI каталога модов
+    └── catalog.py              UI каталога модов
 ```
 
 ---
@@ -200,15 +215,44 @@ themes/FLauncher/
 
 Рекомендуемый размер 1100×650 (совпадает с `setFixedSize` главного окна).
 
-### Размытие панелей
+### Переопределение переводов в теме
 
-Порядок отрисовки: `фон окна → размытый пиксель → overlay цвета *_bg → QSS-контент (бордер, скругление) → дочерние элементы`.
+Любая тема может переопределять строки локализации — полностью или частично. Для этого в JSON темы добавь блок `texts`:
 
-Чем меньше альфа в `*_bg`, тем сильнее виден blur. Обычно:
+```json
+{
+  "name": "My Theme",
+  "texts": {
+    "ru_RU": {
+      "button.play": "Запустить",
+      "info.title": "МОЙ ЛАУНЧЕР",
+      "info.subtitle": "ЛАУНЧЕР ДЛЯ VOXELCORE"
+    },
+    "en_US": {
+      "button.play": "Launch",
+      "info.title": "MY LAUNCHER",
+      "info.subtitle": "LAUNCHER FOR VOXELCORE"
+    }
+  }
+}
+```
 
-- `*_blur: 16` + `*_bg: "rgba(255, 255, 255, 180)"` — матовое стекло, читаемый текст.
-- `*_blur: 20` + `*_bg: "rgba(255, 255, 255, 90)"` — сильный blur, панель почти прозрачна.
-- `*_blur: 0` — выключено, панель показывает цвет `*_bg` целиком.
+Ключи — те же, что и в файлах `ui/langs/*.json`. Указывать можно только те строки, которые отличаются; остальные подтянутся из языкового файла.
+
+Что можно переопределять:
+
+- Тексты интерфейса — `button.play`, `info.title`, `settings.title`, `dialog.ok` и т. д.
+- Плейсхолдеры — `input.nick_placeholder`, `search.placeholder`.
+- Строки подсказок и описаний.
+
+Что **нельзя** переопределять через тему:
+
+- Плюральные формы (`time.years_ago` и др.) — работают только из языковых файлов.
+- Список месяцев (`date.months`) — тоже только из языковых файлов.
+
+Вариант темы (`dark.mytheme.json`) может содержать свой блок `texts` — он **сливается** с текстами базовой темы, а не заменяет их. Например, если в `mytheme.json` есть `texts.ru_RU.button.play`, а в варианте — только `texts.ru_RU.info.title`, то в варианте будут оба ключа.
+
+Переопределения применяются вместе с загрузкой языка и темы — при смене языка остаются активны переопределения текущей темы для нового языка, если такие есть.
 
 ### Как применить изменения
 
